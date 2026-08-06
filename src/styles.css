@@ -1,0 +1,897 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #edf3ee;
+  background: #0d1719;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --bg-canvas: #0d1719;
+  --bg-grid-pattern: #304044;
+  --bg-chapter-rail: #081114;
+  --bg-hud: #101c1f;
+  --bg-panel: #111d1f;
+  --color-surface-locked: #657276;
+  --color-surface-available: #1e655c;
+  --color-surface-active: #d8a13b;
+  --color-surface-submitted: #8b5f2b;
+  --color-surface-completed: #2d7c60;
+  --color-border-locked: #738084;
+  --color-border-available: #68d3bb;
+  --color-border-active: #f4c76d;
+  --color-border-submitted: #efb763;
+  --color-border-completed: #91e2bb;
+  --color-selection-ring: #f1b84b;
+  --color-focus-ring: #e6f4ff;
+  --color-edge-locked: #536165;
+  --color-edge-available: #61bba9;
+  --color-edge-completed: #72d4a5;
+  --color-text: #edf3ee;
+  --color-text-muted: #9dadaa;
+  --color-text-quiet: #748581;
+  --color-divider: #2a393c;
+  --color-danger-muted: #d2a072;
+  --node-transition: 300ms ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+}
+
+button {
+  font: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  width: 100%;
+  height: 100dvh;
+  background: var(--bg-canvas);
+}
+
+.chapter-navigation {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  padding: 12px 0;
+  overflow: hidden;
+  background: var(--bg-chapter-rail);
+  border-right: 1px solid var(--color-divider);
+}
+
+.chapter-navigation__mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 24px;
+  border: 1px solid #526366;
+  transform: rotate(45deg);
+}
+
+.chapter-navigation__mark span {
+  position: absolute;
+  background: var(--color-border-available);
+}
+
+.chapter-navigation__mark span:first-child {
+  top: 7px;
+  left: 7px;
+  width: 12px;
+  height: 1px;
+}
+
+.chapter-navigation__mark span:last-child {
+  top: 7px;
+  left: 7px;
+  width: 1px;
+  height: 12px;
+}
+
+.chapter-navigation__chapters {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.chapter-tab {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.chapter-tab::before {
+  position: absolute;
+  left: -11px;
+  width: 3px;
+  height: 18px;
+  background: transparent;
+  content: "";
+}
+
+.chapter-tab[data-active="true"] {
+  color: var(--color-text);
+  background: #142326;
+  border-color: #3d5053;
+}
+
+.chapter-tab[data-active="true"]::before {
+  background: var(--color-border-available);
+}
+
+.chapter-tab span {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.chapter-navigation__course {
+  max-height: 190px;
+  overflow: hidden;
+  color: var(--color-text-quiet);
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.map-stage {
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.hud-bar {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  height: 48px;
+  padding: 0 12px 0 18px;
+  background: var(--bg-hud);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.hud-bar__title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.hud-bar__kicker {
+  flex: 0 0 auto;
+  color: var(--color-text-quiet);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hud-bar h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 580;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-bar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-bar__progress {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-bar__progress strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.hud-button,
+.mission-panel__close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  place-items: center;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid #3a4a4d;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.hud-button:hover,
+.mission-panel__close:hover {
+  color: var(--color-text);
+  border-color: #718184;
+}
+
+.hud-button svg,
+.mission-panel__close svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.6;
+}
+
+.quest-map {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-canvas);
+}
+
+.quest-map:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -3px;
+}
+
+.quest-map .react-flow {
+  background: var(--bg-canvas);
+}
+
+.quest-map .react-flow__pane {
+  cursor: grab;
+}
+
+.quest-map .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.quest-map .react-flow__node,
+.quest-map .react-flow__node:focus,
+.quest-map .react-flow__node:focus-visible {
+  outline: none;
+}
+
+.quest-map .react-flow__controls {
+  overflow: hidden;
+  background: var(--bg-chapter-rail);
+  border: 1px solid var(--color-divider);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.quest-map .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  color: var(--color-text-muted);
+  background: var(--bg-chapter-rail);
+  border-color: var(--color-divider);
+  fill: currentColor;
+}
+
+.quest-map .react-flow__controls-button:hover {
+  color: var(--color-text);
+  background: #162326;
+}
+
+.quest-map .react-flow__controls-button:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -3px;
+}
+
+.quest-node-shell {
+  --node-size: 64px;
+  position: relative;
+  width: var(--node-size);
+  height: var(--node-size);
+}
+
+.quest-node--optional {
+  --node-size: 52px;
+}
+
+.quest-node--milestone {
+  --node-size: 96px;
+}
+
+.quest-node-shell .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.quest-node-button {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.quest-node-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.quest-node-button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 5px;
+}
+
+.quest-node-shape {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-surface-locked) 30%, transparent);
+  border: 1.5px solid var(--color-border-locked);
+  border-radius: 8px;
+  transition:
+    background-color var(--node-transition),
+    border-color var(--node-transition),
+    color var(--node-transition),
+    transform 150ms ease-out;
+}
+
+.quest-node--optional .quest-node-shape {
+  border-style: dashed;
+  border-radius: 0;
+  clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%);
+}
+
+.quest-node--milestone .quest-node-shape {
+  border-radius: 0;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.quest-node-frame {
+  position: absolute;
+  inset: 7px;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.quest-node--optional .quest-node-frame {
+  inset: 6px;
+  border-style: dashed;
+  clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%);
+}
+
+.quest-node--milestone .quest-node-frame {
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.quest-node-shell[data-progress="locked"] .mission-icon {
+  opacity: 0.4;
+}
+
+.quest-node-shell[data-progress="available"] .quest-node-shape {
+  color: var(--color-border-available);
+  background: color-mix(in srgb, var(--color-surface-available) 60%, transparent);
+  border: 2px solid var(--color-border-available);
+  animation: unlock-pop 250ms ease-out;
+}
+
+.quest-node-shell[data-progress="active"] .quest-node-shape {
+  color: #171b18;
+  background: var(--color-surface-active);
+  border: 2.5px solid var(--color-border-active);
+}
+
+.quest-node-shell[data-progress="submitted"] .quest-node-shape {
+  color: #fff1d7;
+  background: color-mix(in srgb, var(--color-surface-submitted) 75%, transparent);
+  border: 2px solid var(--color-border-submitted);
+}
+
+.quest-node-shell[data-progress="completed"] .quest-node-shape {
+  color: #f0fff7;
+  background: var(--color-surface-completed);
+  border: 2px solid var(--color-border-completed);
+}
+
+.quest-node-shell[data-selected="true"] .quest-node-shape {
+  outline: 2px solid var(--color-selection-ring);
+  outline-offset: 5px;
+}
+
+.quest-node-button:hover .quest-node-shape {
+  transform: scale(1.05);
+}
+
+.mission-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.quest-node--optional .mission-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.quest-node--milestone .mission-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.quest-node-title {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  display: -webkit-box;
+  width: 120px;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.76rem;
+  font-weight: 580;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  transform: translateX(-50%);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.quest-node-shell[data-progress="locked"] .quest-node-title {
+  color: #9aa5a4;
+}
+
+.quest-node-shell[data-detail="overview"] .quest-node-title,
+.quest-node-shell[data-detail="far"] .quest-node-title {
+  display: none;
+}
+
+.quest-node-shell[data-detail="far"] .mission-icon,
+.quest-node-shell[data-detail="far"] .quest-node-frame {
+  display: none;
+}
+
+.quest-node-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  z-index: 20;
+  display: grid;
+  min-width: 138px;
+  padding: 8px 10px;
+  color: var(--color-text);
+  font-size: 0.69rem;
+  line-height: 1.3;
+  text-align: left;
+  pointer-events: none;
+  visibility: hidden;
+  background: #142225;
+  border: 1px solid #425356;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 100ms ease 0ms,
+    transform 100ms ease 0ms,
+    visibility 0ms linear 100ms;
+}
+
+.quest-node-tooltip span:last-child {
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quest-node-button:hover .quest-node-tooltip,
+.quest-node-button:focus-visible .quest-node-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition-delay: 200ms;
+}
+
+.branch-junction {
+  display: block;
+  width: 6px;
+  height: 6px;
+  background: var(--color-edge-completed);
+  border: 1px solid var(--bg-canvas);
+  border-radius: 50%;
+}
+
+.react-flow__edge-path.quest-edge-path {
+  stroke: var(--color-edge-locked);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  opacity: 0.72;
+  transition:
+    stroke 400ms ease,
+    stroke-width 400ms ease,
+    opacity 150ms ease;
+}
+
+.react-flow__edge-path.quest-edge-path[data-progress="available"] {
+  stroke: var(--color-edge-available);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+}
+
+.react-flow__edge-path.quest-edge-path[data-progress="completed"] {
+  stroke: var(--color-edge-completed);
+  stroke-width: 3;
+  stroke-dasharray: none;
+}
+
+.react-flow__edge-path.quest-edge-path[data-optional="true"] {
+  stroke-dasharray: 4 4;
+  stroke-width: 2;
+}
+
+.react-flow__edge-path.quest-edge-path[data-highlighted="true"] {
+  opacity: 1;
+  stroke-width: 3.5;
+}
+
+.mission-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  width: min(100vw, clamp(360px, 32vw, 460px));
+  padding: 24px 28px 28px;
+  overflow-y: auto;
+  flex-direction: column;
+  color: var(--color-text);
+  background: var(--bg-panel);
+  border-left: 1px solid #405154;
+  box-shadow: -12px 0 28px rgb(0 0 0 / 22%);
+  animation: panel-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mission-panel[data-closing="true"] {
+  pointer-events: none;
+  animation: panel-out 200ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+.mission-panel__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.mission-panel__type {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.mission-panel__identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 32px 0 24px;
+}
+
+.mission-panel__icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  color: var(--color-border-locked);
+  background: color-mix(in srgb, var(--color-surface-locked) 30%, transparent);
+  border: 1.5px solid var(--color-border-locked);
+  border-radius: 8px;
+}
+
+.mission-panel__icon--optional {
+  width: 52px;
+  height: 52px;
+  border-style: dashed;
+  border-radius: 0;
+  clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%);
+}
+
+.mission-panel__icon--milestone {
+  width: 72px;
+  height: 72px;
+  border-radius: 0;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.mission-panel__icon[data-progress="available"] {
+  color: var(--color-border-available);
+  background: color-mix(in srgb, var(--color-surface-available) 60%, transparent);
+  border-color: var(--color-border-available);
+}
+
+.mission-panel__icon[data-progress="completed"] {
+  color: #f0fff7;
+  background: var(--color-surface-completed);
+  border-color: var(--color-border-completed);
+}
+
+.mission-panel__icon .mission-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.mission-panel__state {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.67rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mission-panel__state[data-progress="available"] {
+  color: var(--color-border-available);
+}
+
+.mission-panel__state[data-progress="completed"] {
+  color: var(--color-border-completed);
+}
+
+.mission-panel h2 {
+  margin: 5px 0 0;
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 620;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.mission-panel__description {
+  margin: 0 0 30px;
+  color: #c8d2cf;
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+.mission-panel__section {
+  padding: 20px 0;
+  border-top: 1px solid var(--color-divider);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.mission-panel__section h3 {
+  margin: 0 0 8px;
+  color: var(--color-text-quiet);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mission-panel__section p {
+  margin: 0;
+  color: #c2cdca;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.mission-panel__action {
+  margin-top: auto;
+  padding-top: 32px;
+}
+
+.locked-explanation {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid #594638;
+}
+
+.locked-explanation__mark {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  background: transparent;
+  border: 1px dashed var(--color-danger-muted);
+  transform: rotate(45deg);
+}
+
+.locked-explanation strong {
+  color: #e1c1a2;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.locked-explanation p {
+  margin: 5px 0 0;
+  color: #bba795;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.complete-mission-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+  color: #09221c;
+  font-weight: 680;
+  background: var(--color-border-available);
+  border: 1px solid #a2edda;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.complete-mission-button:hover {
+  background: #85dfcb;
+}
+
+.mission-complete-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--color-border-completed);
+  font-size: 0.88rem;
+}
+
+.mission-complete-note span {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+@keyframes unlock-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .hud-bar {
+    padding-left: 12px;
+  }
+
+  .hud-bar__kicker {
+    display: none;
+  }
+
+  .chapter-navigation__course {
+    display: none;
+  }
+
+  .mission-panel {
+    padding: 20px 22px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 150ms !important;
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .quest-node-button:hover .quest-node-shape {
+    transform: none;
+  }
+
+  .quest-node-shell[data-progress="available"] .quest-node-shape {
+    animation-name: none;
+  }
+
+  .mission-panel {
+    animation-name: panel-fade;
+  }
+
+  .mission-panel[data-closing="true"] {
+    animation-name: panel-fade-out;
+  }
+}
+
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
