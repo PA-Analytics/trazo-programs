@@ -5,16 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node --experimental-strip-types src/server/index.ts",
+    "server": "node --experimental-strip-types src/server/index.ts",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^9.0.0",
+    "@google/genai": "^2.17.1",
+    "@types/node": "^26.2.0",
     "@xyflow/react": "latest",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",

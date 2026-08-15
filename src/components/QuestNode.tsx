@@ -8,7 +8,7 @@ import {
 } from '@xyflow/react'
 import type { Mission, ProgressState } from '../domain/course'
 import { nodeTypeLabels, progressLabels } from '../presentation/labels'
-import { MissionIcon } from './icons'
+import { MissionIcon, StateBadge } from './icons'
 
 export interface QuestNodeData extends Record<string, unknown> {
   mission: Mission
@@ -24,10 +24,11 @@ export type QuestFlowNode = Node<QuestNodeData, 'quest'>
 export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNode>) {
   const { mission, progressState, selected, lockedReason, onSelect, onHover } = data
   const { zoom } = useViewport()
-  const detailLevel = zoom > 0.8 ? 'standard' : zoom >= 0.5 ? 'overview' : 'far'
+  const detailLevel = zoom >= 0.62 ? 'standard' : zoom >= 0.42 ? 'overview' : 'far'
   const stateLabel = progressLabels[progressState]
   const typeLabel = nodeTypeLabels[mission.nodeType]
   const description = lockedReason ? ` ${lockedReason}` : ''
+  const subtitle = mission.mapSubtitle ? ` ${mission.mapSubtitle}` : ''
   const tooltipId = `mission-tooltip-${mission.id}`
 
   return (
@@ -36,15 +37,22 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
       data-progress={progressState}
       data-selected={selected}
       data-detail={detailLevel}
+      data-role={mission.mapRole}
       onPointerEnter={() => onHover(mission.id)}
       onPointerLeave={() => onHover(null)}
     >
+      {mission.nodeType === 'milestone' && (
+        <span className="quest-node-destination-rings" aria-hidden="true">
+          <span />
+          <span />
+        </span>
+      )}
       <Handle type="target" position={Position.Left} isConnectable={false} />
       <button
         id={`mission-node-${mission.id}`}
         className="quest-node-button nodrag nopan"
         type="button"
-        aria-label={`${typeLabel}: ${mission.title}. Estado: ${stateLabel}.${description}`}
+        aria-label={`${typeLabel}: ${mission.title}. Estado: ${stateLabel}.${subtitle}${description}`}
         aria-describedby={tooltipId}
         aria-haspopup="dialog"
         aria-expanded={selected}
@@ -52,14 +60,47 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
         onFocus={() => onHover(mission.id)}
         onBlur={() => onHover(null)}
       >
+        <span className="quest-node-depth" aria-hidden="true" />
         <span className="quest-node-shape" aria-hidden="true">
-          {mission.nodeType !== 'normal' && <span className="quest-node-frame" />}
-          <MissionIcon state={progressState} nodeType={mission.nodeType} />
+          <span className="quest-node-frame" />
+          <MissionIcon state={progressState} nodeType={mission.nodeType} missionId={mission.id} />
+          <StateBadge state={progressState} />
         </span>
+        {mission.mapRole === 'entry' && progressState === 'available' && (
+          <span className="quest-node-entry-cue" aria-hidden="true">
+            <span />
+            Empieza aquí
+          </span>
+        )}
+        {mission.nodeType === 'milestone' && (
+          <span className="quest-node-eyebrow" aria-hidden="true">
+            Destino · 09
+          </span>
+        )}
         <span className="quest-node-title">{mission.title}</span>
+        {mission.mapSubtitle && (
+          <span className="quest-node-subtitle">{mission.mapSubtitle}</span>
+        )}
+        {mission.mapRole === 'convergence' && (
+          <span className="quest-node-role-cue" aria-hidden="true">
+            Las rutas se unen
+          </span>
+        )}
+        {mission.nodeType === 'optional' && (
+          <span className="quest-node-role-cue quest-node-role-cue--optional" aria-hidden="true">
+            Ruta extra
+          </span>
+        )}
+        {progressState === 'active' && (
+          <span className="quest-node-cue" aria-hidden="true">
+            <span />
+            Aquí estás
+          </span>
+        )}
         <span id={tooltipId} className="quest-node-tooltip" role="tooltip">
           <span>{mission.title}</span>
           <span>{stateLabel}</span>
+          <span className="quest-node-tooltip__context">{mission.description}</span>
         </span>
       </button>
       <Handle type="source" position={Position.Right} isConnectable={false} />

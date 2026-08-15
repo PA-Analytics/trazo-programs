@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
-  Background,
-  BackgroundVariant,
-  Controls,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
+import {
   ReactFlow,
   ReactFlowProvider,
   type Node,
   type NodeTypes,
   type ReactFlowInstance,
 } from '@xyflow/react'
-import type { Chapter, MissionProgress } from '../domain/course'
+import type { Chapter, Mission, MissionProgress } from '../domain/course'
 import { deriveEdgeProgress } from '../domain/progression'
 import { JunctionNode } from './JunctionNode'
+import { MapControls } from './MapControls'
 import { QuestEdge, type QuestFlowEdge } from './QuestEdge'
 import { QuestNode, type QuestFlowNode } from './QuestNode'
+import { TerritoryNode, type TerritoryFlowNode } from './TerritoryNode'
 
 interface QuestMapProps {
   chapter: Chapter
@@ -29,20 +35,26 @@ interface JunctionNodeData extends Record<string, unknown> {
 }
 
 type JunctionFlowNode = Node<JunctionNodeData, 'junction'>
-type MapNode = QuestFlowNode | JunctionFlowNode
+type MapNode = QuestFlowNode | JunctionFlowNode | TerritoryFlowNode
 
 const nodeTypes = {
   quest: QuestNode,
   junction: JunctionNode,
+  territory: TerritoryNode,
 } satisfies NodeTypes
 
 const edgeTypes = { quest: QuestEdge }
 
 const nodeDimensions = {
-  normal: 64,
-  optional: 52,
-  milestone: 96,
+  normal: 80,
+  optional: 64,
+  milestone: 152,
 } as const
+
+function getNodeDimension(mission: Mission) {
+  if (mission.mapRole === 'entry' || mission.mapRole === 'convergence') return 96
+  return nodeDimensions[mission.nodeType]
+}
 
 function QuestMapCanvas({
   chapter,
@@ -55,6 +67,21 @@ function QuestMapCanvas({
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const [instance, setInstance] = useState<ReactFlowInstance<MapNode, QuestFlowEdge> | null>(null)
   const [hoveredMissionId, setHoveredMissionId] = useState<string | null>(null)
+  const [cameraZoom, setCameraZoom] = useState(1)
+
+  const cameraDuration = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : 150
+
+  const fitMap = useCallback(() => {
+    if (!instance) return
+    void instance.fitView({
+      padding: 0.08,
+      minZoom: 0.4,
+      maxZoom: 1.05,
+      duration: cameraDuration,
+    })
+  }, [cameraDuration, instance])
 
   const nodes = useMemo<MapNode[]>(() => {
     const missionNodes: QuestFlowNode[] = chapter.missions.map((mission) => ({
@@ -65,6 +92,7 @@ function QuestMapCanvas({
       selectable: false,
       connectable: false,
       focusable: false,
+      zIndex: 3,
       data: {
         mission,
         progressState: progress[mission.id],
@@ -93,34 +121,69 @@ function QuestMapCanvas({
       }),
     )
 
-    return [...missionNodes, ...junctionNodes]
+    const territoryNodes: TerritoryFlowNode[] = (chapter.regions ?? []).map(
+      (region) => ({
+        id: region.id,
+        type: 'territory',
+        position: region.position,
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        focusable: false,
+        deletable: false,
+        zIndex: 0,
+        style: { width: region.width, height: region.height },
+        data: { region },
+      }),
+    )
+
+    return [...territoryNodes, ...missionNodes, ...junctionNodes]
   }, [chapter, lockedReasons, onMissionSelect, progress, selectedMissionId])
 
   const edges = useMemo<QuestFlowEdge[]>(
-    () =>
-      chapter.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        type: 'quest',
-        focusable: false,
-        selectable: false,
-        zIndex: 1,
-        data: {
-          progressState: deriveEdgeProgress(edge, progress),
-          optional: edge.optional ?? false,
-          highlighted:
-            hoveredMissionId === edge.source || hoveredMissionId === edge.target,
-          via: edge.via,
-        },
-      })),
-    [chapter.edges, hoveredMissionId, progress],
+    () => {
+      const nodeTypeById = new Map(
+        chapter.missions.map((mission) => [mission.id, mission.nodeType]),
+      )
+
+      return chapter.edges.map((edge) => {
+        const sourceState = progress[edge.source]
+        const targetState = progress[edge.target]
+        const routeTier =
+          sourceState === 'completed' && targetState === 'completed'
+            ? 'traveled'
+            : sourceState === 'completed' &&
+                ['available', 'active', 'submitted'].includes(targetState)
+              ? 'immediate'
+              : 'future'
+
+        return {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          type: 'quest',
+          focusable: false,
+          selectable: false,
+          zIndex: 1,
+          data: {
+            progressState: deriveEdgeProgress(edge, progress),
+            routeTier,
+            optional: edge.optional ?? false,
+            highlighted:
+              hoveredMissionId === edge.source || hoveredMissionId === edge.target,
+            leadsToMilestone: nodeTypeById.get(edge.target) === 'milestone',
+            via: edge.via,
+          },
+        }
+      })
+    },
+    [chapter.edges, chapter.missions, hoveredMissionId, progress],
   )
 
   useEffect(() => {
     if (!instance || recenterRequest === 0) return
-    void instance.fitView({ padding: 0.16, minZoom: 0.4, maxZoom: 1 })
-  }, [instance, recenterRequest])
+    fitMap()
+  }, [fitMap, instance, recenterRequest])
 
   useEffect(() => {
     if (!instance || !selectedMissionId || !mapContainerRef.current) return
@@ -130,7 +193,7 @@ function QuestMapCanvas({
     const mapWidth = mapContainerRef.current.clientWidth
     const panelWidth = Math.min(460, Math.max(360, mapWidth * 0.32))
     const zoom = instance.getZoom()
-    const size = nodeDimensions[mission.nodeType]
+    const size = getNodeDimension(mission)
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const centerX = mission.position.x + size / 2 + panelWidth / (2 * zoom)
     const centerY = mission.position.y + size / 2
@@ -177,7 +240,9 @@ function QuestMapCanvas({
       <p id="quest-map-instructions" className="visually-hidden">
         Mapa de misiones. Usa Tab para recorrer las misiones y Enter para abrir sus detalles.
         Usa las flechas para desplazar el mapa y los controles para acercar, alejar o volver a
-        encuadrar la ruta.
+        encuadrar la ruta. El capítulo recorre tres territorios: Taller, desde la premisa hasta
+        el ensamble; Campo, donde publicas, observas y decides; y Mercado, el destino de la
+        primera pieza publicada.
       </p>
       <ReactFlow<MapNode, QuestFlowEdge>
         nodes={nodes}
@@ -185,10 +250,11 @@ function QuestMapCanvas({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onInit={setInstance}
+        onMove={(_event, viewport) => setCameraZoom(viewport.zoom)}
         minZoom={0.4}
         maxZoom={1.5}
         fitView
-        fitViewOptions={{ padding: 0.16, minZoom: 0.4, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.08, minZoom: 0.4, maxZoom: 1.05 }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -201,19 +267,14 @@ function QuestMapCanvas({
         preventScrolling
         aria-label="Mapa visual de misiones del Chapter 1"
         proOptions={{ hideAttribution: true }}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color="var(--bg-grid-pattern)"
-        />
-        <Controls
-          position="bottom-left"
-          showInteractive={false}
-          aria-label="Controles de cámara del mapa"
-        />
-      </ReactFlow>
+      />
+      <MapControls
+        zoom={cameraZoom}
+        disabled={!instance}
+        onZoomIn={() => void instance?.zoomIn({ duration: cameraDuration })}
+        onZoomOut={() => void instance?.zoomOut({ duration: cameraDuration })}
+        onFit={fitMap}
+      />
     </div>
   )
 }

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "active_profile": "default_gemini_heavy",
+  "profiles": {
+    "default_gemini_heavy": {
+      "description": "Perfil óptimo diario: Gemini 3.7 Flash como caballo de batalla, DeepSeek Flash Free para Red Team sin sesgo, GPT-5.6 Terra para arquitectura.",
+      "roles": {
+        "orchestrator": {
+          "provider": "antigravity",
+          "model": "gemini-3.7-flash",
+          "tier": 0
+        },
+        "planner": {
+          "provider": "openai",
+          "model": "gpt-5.6-terra",
+          "tier": 1
+        },
+        "developer": {
+          "provider": "antigravity",
+          "model": "gemini-3.7-flash",
+          "tier": 0
+        },
+        "red_team": {
+          "provider": "openzen",
+          "model": "deepseek-v4-flash-free",
+          "tier": 0
+        },
+        "tester": {
+          "provider": "openzen",
+          "model": "mimo-v2.5-free",
+          "tier": 0
+        },
+        "docs": {
+          "provider": "openzen",
+          "model": "mimo-v2.5-free",
+          "tier": 0
+        }
+      }
+    },
+    "openai_codex_focus": {
+      "description": "Perfil para operar desde Codex/OpenAI con GPT-5.6 Luna y Terra.",
+      "roles": {
+        "orchestrator": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "tier": 1
+        },
+        "planner": {
+          "provider": "openai",
+          "model": "gpt-5.6-terra",
+          "tier": 1
+        },
+        "developer": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "tier": 1
+        },
+        "red_team": {
+          "provider": "openzen",
+          "model": "deepseek-v4-flash-free",
+          "tier": 0
+        },
+        "tester": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "tier": 1
+        },
+        "docs": {
+          "provider": "openzen",
+          "model": "mimo-v2.5-free",
+          "tier": 0
+        }
+      }
+    },
+    "emergency_sol": {
+      "description": "Perfil de escalación crítica (Tier 2): GPT-5.6 Sol para resolver bloqueos arquitectónicos o auditoría mayor.",
+      "roles": {
+        "orchestrator": {
+          "provider": "antigravity",
+          "model": "gemini-3.7-flash",
+          "tier": 0
+        },
+        "planner": {
+          "provider": "openai",
+          "model": "gpt-5.6-sol",
+          "tier": 2
+        },
+        "developer": {
+          "provider": "openai",
+          "model": "gpt-5.6-terra",
+          "tier": 1
+        },
+        "red_team": {
+          "provider": "nvidia_nim",
+          "model": "nemotron-3-ultra-550b",
+          "tier": 2
+        },
+        "tester": {
+          "provider": "antigravity",
+          "model": "gemini-3.7-flash",
+          "tier": 0
+        },
+        "docs": {
+          "provider": "openzen",
+          "model": "mimo-v2.5-free",
+          "tier": 0
+        }
+      }
+    }
+  },
+  "providers": {
+    "antigravity": {
+      "env_var": "GEMINI_API_KEY",
+      "endpoint": "native"
+    },
+    "openai": {
+      "env_var": "OPENAI_API_KEY",
+      "endpoint": "https://api.openai.com/v1"
+    },
+    "openzen": {
+      "env_var": "OPENZEN_API_KEY",
+      "endpoint": "https://api.opencodezen.com/v1"
+    },
+    "nvidia_nim": {
+      "env_var": "NVIDIA_API_KEY",
+      "endpoint": "https://integrate.api.nvidia.com/v1"
+    }
+  }
+}

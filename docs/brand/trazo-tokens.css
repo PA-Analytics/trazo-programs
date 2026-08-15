@@ -1,0 +1,52 @@
+:root {
+  /* color — raw */
+  --trazo-paper: #f3eee2;
+  --trazo-ink: #1a2119;
+  --trazo-surface: #ebe5d6;
+  --trazo-surface-2: #e0d9c7;
+  --trazo-indigo: #2625b7;
+  --trazo-indigo-soft: #4646d7;
+  --trazo-stone: #969181;
+  --trazo-muted-foreground: #686558;
+  --trazo-line: #d0c8b6;
+
+  /* color — semantic */
+  --trazo-bg: var(--trazo-paper);
+  --trazo-surface-default: var(--trazo-surface);
+  --trazo-ink-default: var(--trazo-ink);
+  --trazo-muted: var(--trazo-muted-foreground);
+  --trazo-border: var(--trazo-ink);
+  --trazo-action: var(--trazo-indigo);
+  --trazo-progress: var(--trazo-indigo);
+  --trazo-selected: var(--trazo-ink);
+  --trazo-locked: var(--trazo-stone);
+  --trazo-focus: var(--trazo-indigo);
+
+  /* typography */
+  --trazo-font-display: Anton, "Arial Narrow", sans-serif;
+  --trazo-font-ui: Geist, ui-sans-serif, system-ui, sans-serif;
+
+  /* shape */
+  --trazo-radius-sm: 3px;
+  --trazo-radius-md: 13px;
+  --trazo-radius-edge: 13px 3px 13px 3px;
+  --trazo-radius-edge-alt: 3px 13px 3px 13px;
+  --trazo-border-width: 2px;
+  --trazo-border-width-strong: 3px;
+  --trazo-border-width-hairline: 1px;
+
+  /* spacing */
+  --trazo-space-unit: 4px;
+  --trazo-content-max: 72rem;
+  --trazo-content-x: 1.5rem;
+  --trazo-section-y: 5rem;
+  --trazo-section-y-wide: 7rem;
+
+  /* motion */
+  --trazo-motion-fast: 300ms;
+  --trazo-motion-reveal: 500ms;
+  --trazo-motion-route: 3.8s;
+  --trazo-motion-pulse: 2.4s;
+  --trazo-ease-standard: ease;
+  --trazo-ease-linear: linear;
+}

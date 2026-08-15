@@ -1,0 +1,67 @@
+:root {
+  /* color — raw cartographic palette: TEXTURED NEUTRAL PAPER */
+  --trazo-paper: #f0efe8;
+  --trazo-paper-warm: #faf9f3;
+  --trazo-paper-shadow: #e2e0d8;
+  --trazo-ink: #19201d;
+  --trazo-ink-soft: #29322e;
+  --trazo-surface: #faf9f3;
+  --trazo-surface-2: #e4e2da;
+  --trazo-indigo: #2625b7;
+  --trazo-indigo-soft: #4443da;
+  --trazo-indigo-light: #ecebff;
+  --trazo-mint: #2daf95;
+  --trazo-mint-soft: #d5f4ed;
+  --trazo-reward: #19201d;
+  --trazo-reward-soft: color-mix(in srgb, var(--trazo-indigo) 12%, var(--trazo-paper-warm));
+  --trazo-stone: #92958e;
+  --trazo-stone-dark: #5c5f59;
+  --trazo-muted-foreground: #696c66;
+  --trazo-line: #d3d1c9;
+  --trazo-topo-contour: rgba(100, 105, 95, 0.10);
+
+  /* color — semantic states */
+  --trazo-bg: var(--trazo-paper);
+  --trazo-surface-default: var(--trazo-surface);
+  --trazo-ink-default: var(--trazo-ink);
+  --trazo-muted: var(--trazo-muted-foreground);
+  --trazo-border: var(--trazo-ink);
+  --trazo-action: var(--trazo-indigo);
+  --trazo-progress: var(--trazo-indigo);
+  --trazo-selected: #19201d;
+  --trazo-locked: var(--trazo-stone);
+  --trazo-focus: var(--trazo-indigo);
+  --trazo-available: var(--trazo-indigo);
+  --trazo-active: var(--trazo-indigo);
+  --trazo-submitted: var(--trazo-surface-2);
+  --trazo-completed: var(--trazo-indigo);
+  --trazo-optional: var(--trazo-stone);
+  --trazo-milestone: var(--trazo-indigo);
+
+  /* typography */
+  --trazo-font-display: Anton, "Arial Narrow", sans-serif;
+  --trazo-font-ui: Geist, ui-sans-serif, system-ui, sans-serif;
+
+  /* shape & waypoints */
+  --trazo-radius-sm: 4px;
+  --trazo-radius-md: 12px;
+  --trazo-radius-waypoint: 50%;
+  --trazo-border-width: 2px;
+  --trazo-border-width-strong: 3px;
+  --trazo-border-width-hairline: 1px;
+
+  /* spacing */
+  --trazo-space-unit: 4px;
+  --trazo-content-max: 72rem;
+  --trazo-content-x: 1.5rem;
+  --trazo-section-y: 5rem;
+  --trazo-section-y-wide: 7rem;
+
+  /* motion */
+  --trazo-motion-fast: 250ms;
+  --trazo-motion-reveal: 450ms;
+  --trazo-motion-route: 3.5s;
+  --trazo-motion-pulse: 2.2s;
+  --trazo-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --trazo-ease-linear: linear;
+}
