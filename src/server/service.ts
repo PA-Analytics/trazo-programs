@@ -1,5 +1,5 @@
 import { course } from '../data/course.ts'
-import type { ImplementationState } from '../domain/course.ts'
+import type { ImplementationArtifact, ImplementationState } from '../domain/course.ts'
 import { deriveMissionProgress } from '../domain/progression.ts'
 import type { EvidenceEvaluatorService } from './evaluator/evaluatorService.ts'
 import type {
@@ -177,10 +177,25 @@ export class ImplementationService {
       }
     }
 
+    // Resolve consumed artifacts for this mission (e.g. 'premise' for N02/N03)
+    const consumedArtifacts: Record<string, ImplementationArtifact> = {}
+    if (mission.consumesArtifacts && mission.consumesArtifacts.length > 0) {
+      for (const artifactKey of mission.consumesArtifacts) {
+        const artifact = state.artifacts?.[artifactKey]
+        if (!artifact) {
+          throw new Error(
+            `Cannot evaluate mission '${missionId}': required artifact '${artifactKey}' from previous missions is missing`,
+          )
+        }
+        consumedArtifacts[artifactKey] = artifact
+      }
+    }
+
     // 6. Evaluate evidence via the evaluator pipeline (Gemini/Mock -> Schema Validator -> applyEvaluationPolicy)
     const evaluationResult = await evaluator.evaluateEvidence({
       missionId,
       evidence: trimmedEvidence,
+      consumedArtifacts,
     })
 
     const { evaluation, policyVerdict } = evaluationResult
@@ -200,17 +215,53 @@ export class ImplementationService {
         stateChanged = true
       }
 
-      // Consequential Artifact Pipeline: Canonical artifact produced only on verified PASS
-      if (mission.producesArtifacts?.includes('premise')) {
-        state.artifacts = state.artifacts ?? {}
-        const existingArtifact = state.artifacts['premise']
+      // Consequential Artifact Pipeline: Canonical artifacts produced only on verified PASS
+      state.artifacts = state.artifacts ?? {}
 
+      if (mission.producesArtifacts?.includes('premise')) {
+        const existingArtifact = state.artifacts['premise']
         if (!existingArtifact) {
           state.artifacts['premise'] = {
             key: 'premise',
             sourceMissionId: mission.id,
             value: {
               statement: trimmedEvidence,
+            },
+            createdAt: now,
+            updatedAt: now,
+          }
+          stateChanged = true
+        }
+      }
+
+      if (mission.producesArtifacts?.includes('direct_structure')) {
+        const existingArtifact = state.artifacts['direct_structure']
+        if (!existingArtifact) {
+          state.artifacts['direct_structure'] = {
+            key: 'direct_structure',
+            sourceMissionId: mission.id,
+            value: {
+              variant: 'direct',
+              content: trimmedEvidence,
+              sourcePremiseArtifactId: state.artifacts['premise']?.key || 'premise',
+            },
+            createdAt: now,
+            updatedAt: now,
+          }
+          stateChanged = true
+        }
+      }
+
+      if (mission.producesArtifacts?.includes('narrative_structure')) {
+        const existingArtifact = state.artifacts['narrative_structure']
+        if (!existingArtifact) {
+          state.artifacts['narrative_structure'] = {
+            key: 'narrative_structure',
+            sourceMissionId: mission.id,
+            value: {
+              variant: 'narrative',
+              content: trimmedEvidence,
+              sourcePremiseArtifactId: state.artifacts['premise']?.key || 'premise',
             },
             createdAt: now,
             updatedAt: now,

@@ -66,6 +66,34 @@ export const course: Course = {
           evidenceCriteria:
             'Incluye apertura, desarrollo y cierre en un orden que pueda ejecutarse.',
           consumesArtifacts: ['premise'],
+          producesArtifacts: ['direct_structure'],
+          rubric: {
+            id: 'rubric-n02',
+            version: '1.0.0',
+            criteria: [
+              {
+                id: 'c1_three_part_order',
+                label: 'Apertura, Desarrollo y Cierre',
+                description:
+                  'Estructura la pieza en tres momentos claros y ordenados: apertura/gancho, desarrollo del argumento y cierre/llamado.',
+                isRequired: true,
+              },
+              {
+                id: 'c2_premise_consistency',
+                label: 'Consistencia con la Premisa Verificada',
+                description:
+                  'Mantiene fidelidad al público objetivo y problema o resultado de la premisa verificada en N01, sin contradecirla ni cambiar arbitrariamente de audiencia o tema.',
+                isRequired: true,
+              },
+              {
+                id: 'c3_actionable_clarity',
+                label: 'Claridad y Ejecución Directa',
+                description:
+                  'El esquema es explícito, conciso y directamente accionable para redactar la pieza sin rodeos ni ambigüedades.',
+                isRequired: true,
+              },
+            ],
+          },
         },
         {
           id: 'N03',
@@ -81,6 +109,34 @@ export const course: Course = {
           evidenceCriteria:
             'Debe identificar una situación inicial, un cambio y una resolución conectada con la premisa.',
           consumesArtifacts: ['premise'],
+          producesArtifacts: ['narrative_structure'],
+          rubric: {
+            id: 'rubric-n03',
+            version: '1.0.0',
+            criteria: [
+              {
+                id: 'c1_narrative_arc',
+                label: 'Arco Narrativo (Inicio, Cambio, Resolución)',
+                description:
+                  'Presenta una secuencia de historia identificable con situación inicial (estado actual), cambio/tensión/conflicto y resolución.',
+                isRequired: true,
+              },
+              {
+                id: 'c2_premise_consistency',
+                label: 'Conexión con la Premisa Verificada',
+                description:
+                  'La historia y su desenlace ilustran y respaldan directamente la premisa verificada en N01, sin desviarse hacia otra temática o público ajeno.',
+                isRequired: true,
+              },
+              {
+                id: 'c3_tension_resolution',
+                label: 'Tensión y Aprendizaje',
+                description:
+                  'El giro o conflicto genera una tensión clara que desemboca en un aprendizaje o conclusión coherente con la premisa.',
+                isRequired: true,
+              },
+            ],
+          },
         },
         {
           id: 'N04',

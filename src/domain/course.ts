@@ -97,6 +97,18 @@ export interface PremiseArtifactValue {
   statement: string
 }
 
+export interface DirectStructureArtifactValue {
+  variant: 'direct'
+  content: string
+  sourcePremiseArtifactId?: string
+}
+
+export interface NarrativeStructureArtifactValue {
+  variant: 'narrative'
+  content: string
+  sourcePremiseArtifactId?: string
+}
+
 export interface ImplementationState {
   id: string
   courseId: string

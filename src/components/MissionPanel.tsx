@@ -149,7 +149,7 @@ export function MissionPanel({
         {mission.description}
       </p>
 
-      {/* Consequential Artifact Consumer Section (TASK-005) */}
+      {/* Consequential Artifact Consumer Section (TASK-005 & TASK-011) */}
       {mission.consumesArtifacts?.includes('premise') && (
         <section className="mission-prior-artifact" aria-labelledby="prior-artifact-heading">
           <h3 id="prior-artifact-heading" className="visually-hidden">Artefacto de misión previa</h3>
@@ -157,13 +157,15 @@ export function MissionPanel({
             <div className="mission-prior-artifact__card">
               <div className="mission-prior-artifact__header">
                 <span className="mission-prior-artifact__badge">Trabajo verificado de N01</span>
-                <strong>Premisa de tu pieza:</strong>
+                <strong>Partimos de tu premisa verificada:</strong>
               </div>
               <blockquote className="mission-prior-artifact__quote">
                 "{premiseStatement}"
               </blockquote>
               <p className="mission-prior-artifact__hint">
-                Convierte esta premisa en una estructura directa de apertura, desarrollo y cierre.
+                {mission.id === 'N02'
+                  ? 'Convierte esta premisa en una estructura directa de apertura, desarrollo y cierre.'
+                  : 'Desarrolla esta premisa en una estructura narrativa con situación inicial, cambio y resolución.'}
               </p>
             </div>
           ) : (

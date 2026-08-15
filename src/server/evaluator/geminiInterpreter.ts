@@ -1,5 +1,9 @@
 import { GoogleGenAI } from '@google/genai'
-import type { Mission, StructuredEvidenceEvaluation } from '../../domain/course.ts'
+import type {
+  ImplementationArtifact,
+  Mission,
+  StructuredEvidenceEvaluation,
+} from '../../domain/course.ts'
 import { COMPANION_SYSTEM_INSTRUCTION, buildCompanionUserPrompt } from './prompts.ts'
 import { validateEvidenceEvaluation } from './schema.ts'
 import type { IEvidenceInterpreter } from './types.ts'
@@ -51,13 +55,14 @@ export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
   async interpret(params: {
     mission: Mission
     evidence: string
+    consumedArtifacts?: Record<string, ImplementationArtifact>
   }): Promise<StructuredEvidenceEvaluation> {
-    const { mission, evidence } = params
+    const { mission, evidence, consumedArtifacts } = params
     if (!mission.rubric) {
       throw new Error(`Mission '${mission.id}' has no configured rubric`)
     }
 
-    const userPrompt = buildCompanionUserPrompt(mission, evidence)
+    const userPrompt = buildCompanionUserPrompt(mission, evidence, consumedArtifacts)
 
     let lastError: unknown
     const maxRetries = 4

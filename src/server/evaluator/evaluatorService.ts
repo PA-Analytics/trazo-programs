@@ -52,6 +52,7 @@ export class EvidenceEvaluatorService {
     const rawEvaluation = await this.interpreter.interpret({
       mission,
       evidence,
+      consumedArtifacts: dto.consumedArtifacts,
     })
 
     // Runtime Schema Validation Gatekeeper
