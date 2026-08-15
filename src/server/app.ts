@@ -112,7 +112,7 @@ export function createRequestListener(
       : process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_ROUTES === 'true'
 
   let evaluator = options.evaluatorService
-  if (!evaluator && process.env.GEMINI_API_KEY) {
+  if (!evaluator) {
     try {
       evaluator = new EvidenceEvaluatorService(new GeminiEvidenceInterpreter())
     } catch {
@@ -121,7 +121,7 @@ export function createRequestListener(
   }
 
   let companion = options.companionService
-  if (!companion && process.env.GEMINI_API_KEY) {
+  if (!companion) {
     try {
       companion = new CompanionService(new GeminiNextActionProposer())
     } catch {
@@ -156,11 +156,11 @@ export function createRequestListener(
       const nextActionMatch = pathname.match(/^\/api\/v1\/implementations\/([^/]+)\/next-action$/)
       if (method === 'POST' && nextActionMatch) {
         if (!companion) {
-          if (process.env.GEMINI_API_KEY) {
+          try {
             companion = new CompanionService(new GeminiNextActionProposer())
-          } else {
+          } catch (err: unknown) {
             sendJSON(res, 503, {
-              error: 'Companion service is unavailable: GEMINI_API_KEY is not configured on the server',
+              error: `Companion service is unavailable: ${err instanceof Error ? err.message : String(err)}`,
             })
             return
           }
@@ -205,15 +205,15 @@ export function createRequestListener(
         return
       }
 
-      // POST /api/v1/implementations/:id/submissions - Real Verified Action Submission Pipeline (TASK-004)
+      // POST /api/v1/implementations/:id/submissions - Submit evidence for a mission (TASK-005)
       const submissionMatch = pathname.match(/^\/api\/v1\/implementations\/([^/]+)\/submissions$/)
       if (method === 'POST' && submissionMatch) {
         if (!evaluator) {
-          if (process.env.GEMINI_API_KEY) {
+          try {
             evaluator = new EvidenceEvaluatorService(new GeminiEvidenceInterpreter())
-          } else {
+          } catch (err: unknown) {
             sendJSON(res, 503, {
-              error: 'Evidence evaluation is unavailable: GEMINI_API_KEY is not configured on the server',
+              error: `Evidence evaluation is unavailable: ${err instanceof Error ? err.message : String(err)}`,
             })
             return
           }
@@ -234,6 +234,8 @@ export function createRequestListener(
                 message.includes('locked') ||
                 message.includes('required') ||
                 message.includes('invalid') ||
+                message.includes('empty') ||
+                message.includes('whitespace') ||
                 message.includes('must be')
               ? 400
               : 500
@@ -245,11 +247,11 @@ export function createRequestListener(
       // POST /api/v1/evaluations/evidence - Preview/Evaluation only (TASK-003)
       if (method === 'POST' && pathname === '/api/v1/evaluations/evidence') {
         if (!evaluator) {
-          if (process.env.GEMINI_API_KEY) {
+          try {
             evaluator = new EvidenceEvaluatorService(new GeminiEvidenceInterpreter())
-          } else {
+          } catch (err: unknown) {
             sendJSON(res, 503, {
-              error: 'Evidence evaluation is unavailable: GEMINI_API_KEY is not configured on the server',
+              error: `Evidence evaluation is unavailable: ${err instanceof Error ? err.message : String(err)}`,
             })
             return
           }
@@ -328,7 +330,11 @@ export function createRequestListener(
       sendJSON(res, 404, { error: 'Not Found' })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Internal Server Error'
-      sendJSON(res, 500, { error: message })
+      const status =
+        message.includes('Invalid JSON') || message.includes('SyntaxError') || message.includes('Unexpected')
+          ? 400
+          : 500
+      sendJSON(res, status, { error: message })
     }
   }
 }

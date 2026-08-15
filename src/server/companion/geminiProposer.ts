@@ -6,21 +6,43 @@ import {
 } from './prompts.ts'
 import type { INextActionProposer, NextActionContext } from './types.ts'
 
+export interface GeminiNextActionProposerOptions {
+  apiKey?: string
+  modelName?: string
+  project?: string
+  location?: string
+}
+
 export class GeminiNextActionProposer implements INextActionProposer {
   private ai: GoogleGenAI
   private modelName: string
 
-  constructor(apiKey?: string, modelName?: string) {
-    const rawKey = apiKey || process.env.GEMINI_API_KEY
-    const key = rawKey?.trim()
-    if (!key) {
-      throw new Error(
-        'GeminiNextActionProposer requires GEMINI_API_KEY environment variable or explicit apiKey',
-      )
+  constructor(optionsOrApiKey?: string | GeminiNextActionProposerOptions, modelName?: string) {
+    let opts: GeminiNextActionProposerOptions = {}
+    if (typeof optionsOrApiKey === 'string') {
+      opts = { apiKey: optionsOrApiKey, modelName }
+    } else if (optionsOrApiKey) {
+      opts = optionsOrApiKey
     }
 
-    this.ai = new GoogleGenAI({ apiKey: key })
-    this.modelName = (modelName || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
+    this.modelName = (opts.modelName || modelName || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
+
+    const rawKey = opts.apiKey || process.env.GEMINI_API_KEY
+    const explicitProject = opts.project || process.env.GOOGLE_CLOUD_PROJECT
+    const location = opts.location || process.env.GOOGLE_CLOUD_LOCATION || 'global'
+
+    if (opts.apiKey) {
+      this.ai = new GoogleGenAI({ apiKey: opts.apiKey.trim() })
+    } else if (rawKey && !explicitProject) {
+      this.ai = new GoogleGenAI({ apiKey: rawKey.trim() })
+    } else {
+      const project = explicitProject || 'trazo-agentic-2026'
+      this.ai = new GoogleGenAI({
+        vertexai: true,
+        project,
+        location,
+      })
+    }
   }
 
   async proposeNextAction(context: NextActionContext): Promise<NextActionProposal> {
@@ -28,7 +50,7 @@ export class GeminiNextActionProposer implements INextActionProposer {
     const userPrompt = buildNextActionUserPrompt(context)
 
     let lastError: unknown = null
-    const maxRetries = 3
+    const maxRetries = 4
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -93,7 +115,15 @@ export class GeminiNextActionProposer implements INextActionProposer {
           message.includes('rate limit')
 
         if (attempt < maxRetries && isTransient) {
-          const delayMs = Math.pow(2, attempt) * 1500
+          let delayMs = Math.pow(2, attempt) * 1500
+          const delayMatch =
+            message.match(/retry in ([0-9.]+)s/i) || message.match(/retryDelay[":\s]+([0-9]+)s/i)
+          if (delayMatch && delayMatch[1]) {
+            const requestedSeconds = parseFloat(delayMatch[1])
+            if (!isNaN(requestedSeconds)) {
+              delayMs = Math.max(delayMs, Math.ceil(requestedSeconds * 1000) + 600)
+            }
+          }
           await new Promise((resolve) => setTimeout(resolve, delayMs))
           continue
         }

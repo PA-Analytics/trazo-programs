@@ -4,28 +4,48 @@ import { COMPANION_SYSTEM_INSTRUCTION, buildCompanionUserPrompt } from './prompt
 import { validateEvidenceEvaluation } from './schema.ts'
 import type { IEvidenceInterpreter } from './types.ts'
 
+export interface GeminiEvidenceInterpreterOptions {
+  apiKey?: string
+  model?: string
+  project?: string
+  location?: string
+}
+
 /**
  * Google Gen AI SDK Evidence Interpreter.
  * Evaluates untrusted learner evidence using the Google Gen AI SDK (@google/genai)
- * with a Gemini 3.5+ model (e.g. gemini-3.7-flash).
+ * with a Gemini 3.5+ model (e.g. gemini-3.7-flash) on Vertex AI or Google AI.
  */
 export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
   private ai: GoogleGenAI
   private model: string
 
-  constructor(apiKey?: string, model?: string) {
-    const rawKey = apiKey || process.env.GEMINI_API_KEY
-    const key = rawKey?.trim()
-    if (!key) {
-      throw new Error(
-        'GEMINI_API_KEY is not set. Live evaluation requires a valid Google Gemini API key.',
-      )
+  constructor(optionsOrApiKey?: string | GeminiEvidenceInterpreterOptions, model?: string) {
+    let opts: GeminiEvidenceInterpreterOptions = {}
+    if (typeof optionsOrApiKey === 'string') {
+      opts = { apiKey: optionsOrApiKey, model }
+    } else if (optionsOrApiKey) {
+      opts = optionsOrApiKey
     }
-    this.ai = new GoogleGenAI({ apiKey: key })
 
-    // Require Gemini 3.5+ model; default to gemini-3.7-flash (no older 2.5 fallbacks)
-    const configuredModel = (model || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
-    this.model = configuredModel
+    this.model = (opts.model || model || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
+
+    const rawKey = opts.apiKey || process.env.GEMINI_API_KEY
+    const explicitProject = opts.project || process.env.GOOGLE_CLOUD_PROJECT
+    const location = opts.location || process.env.GOOGLE_CLOUD_LOCATION || 'global'
+
+    if (opts.apiKey) {
+      this.ai = new GoogleGenAI({ apiKey: opts.apiKey.trim() })
+    } else if (rawKey && !explicitProject) {
+      this.ai = new GoogleGenAI({ apiKey: rawKey.trim() })
+    } else {
+      const project = explicitProject || 'trazo-agentic-2026'
+      this.ai = new GoogleGenAI({
+        vertexai: true,
+        project,
+        location,
+      })
+    }
   }
 
   async interpret(params: {
@@ -40,7 +60,7 @@ export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
     const userPrompt = buildCompanionUserPrompt(mission, evidence)
 
     let lastError: unknown
-    const maxRetries = 3
+    const maxRetries = 4
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -84,8 +104,16 @@ export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
           errMsg.includes('rate limit')
 
         if (isTransient && attempt < maxRetries) {
-          const backoffMs = attempt * 2000
-          await new Promise((resolve) => setTimeout(resolve, backoffMs))
+          let waitMs = attempt * 3000
+          const delayMatch =
+            errMsg.match(/retry in ([0-9.]+)s/i) || errMsg.match(/retryDelay[":\s]+([0-9]+)s/i)
+          if (delayMatch && delayMatch[1]) {
+            const requestedSeconds = parseFloat(delayMatch[1])
+            if (!isNaN(requestedSeconds)) {
+              waitMs = Math.max(waitMs, Math.ceil(requestedSeconds * 1000) + 600)
+            }
+          }
+          await new Promise((resolve) => setTimeout(resolve, waitMs))
           continue
         }
         break
