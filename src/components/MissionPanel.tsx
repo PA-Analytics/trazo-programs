@@ -102,6 +102,9 @@ export function MissionPanel({
 
   const premiseArtifact = artifacts?.['premise']
   const premiseStatement = (premiseArtifact?.value as PremiseArtifactValue)?.statement
+  const rubricLabelById = new Map(
+    mission.rubric?.criteria.map((criterion) => [criterion.id, criterion.label]),
+  )
 
   return (
     <aside
@@ -156,12 +159,17 @@ export function MissionPanel({
           {premiseStatement ? (
             <div className="mission-prior-artifact__card">
               <div className="mission-prior-artifact__header">
+                <span className="mission-prior-artifact__eyebrow">Construyes desde</span>
+                <strong className="mission-prior-artifact__verified-title"><span aria-hidden="true">✓</span> Premisa verificada</strong>
                 <span className="mission-prior-artifact__badge">Trabajo verificado de N01</span>
                 <strong>Partimos de tu premisa verificada:</strong>
               </div>
               <blockquote className="mission-prior-artifact__quote">
                 "{premiseStatement}"
               </blockquote>
+              <p className="mission-prior-artifact__direction">
+                Esta evidencia ya fue validada y define el punto de partida de esta misión.
+              </p>
               <p className="mission-prior-artifact__hint">
                 {mission.id === 'N02'
                   ? 'Convierte esta premisa en una estructura directa de apertura, desarrollo y cierre.'
@@ -235,6 +243,7 @@ export function MissionPanel({
       {evaluationState && evaluationState.status !== 'idle' && (
         <section
           className="companion-feedback-section"
+          data-status={evaluationState.status}
           aria-labelledby="companion-feedback-heading"
         >
           <div className="companion-feedback-header">
@@ -280,10 +289,14 @@ export function MissionPanel({
                     {evaluationState.evaluation.criteria.map((c) => (
                       <li key={c.criterionId} data-verdict={c.status}>
                         <span className="criterion-badge" data-verdict={c.status}>
-                          {c.status}
+                          {c.status === 'PASS'
+                            ? 'Cumple'
+                            : c.status === 'NOT_MET'
+                              ? 'Por ajustar'
+                              : 'Aclara'}
                         </span>
                         <div className="criterion-info">
-                          <strong>{c.criterionId}:</strong> {c.rationale}
+                          <strong>{rubricLabelById.get(c.criterionId) ?? 'Criterio'}:</strong> {c.rationale}
                         </div>
                       </li>
                     ))}

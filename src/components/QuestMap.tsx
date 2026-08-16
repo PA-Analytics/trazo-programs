@@ -13,7 +13,12 @@ import {
   type NodeTypes,
   type ReactFlowInstance,
 } from '@xyflow/react'
-import type { Chapter, Mission, MissionProgress } from '../domain/course'
+import type {
+  Chapter,
+  Mission,
+  MissionEvaluationState,
+  MissionProgress,
+} from '../domain/course'
 import { deriveEdgeProgress } from '../domain/progression'
 import { JunctionNode } from './JunctionNode'
 import { MapControls } from './MapControls'
@@ -24,6 +29,8 @@ import { TerritoryNode, type TerritoryFlowNode } from './TerritoryNode'
 interface QuestMapProps {
   chapter: Chapter
   progress: MissionProgress
+  evaluationStateByMissionId: Record<string, MissionEvaluationState>
+  recommendedMissionId: string | null
   selectedMissionId: string | null
   lockedReasons: Record<string, string | undefined>
   recenterRequest: number
@@ -46,19 +53,21 @@ const nodeTypes = {
 const edgeTypes = { quest: QuestEdge }
 
 const nodeDimensions = {
-  normal: 80,
-  optional: 64,
-  milestone: 152,
+  normal: 88,
+  optional: 72,
+  milestone: 160,
 } as const
 
 function getNodeDimension(mission: Mission) {
-  if (mission.mapRole === 'entry' || mission.mapRole === 'convergence') return 96
+  if (mission.mapRole === 'entry' || mission.mapRole === 'convergence') return 104
   return nodeDimensions[mission.nodeType]
 }
 
 function QuestMapCanvas({
   chapter,
   progress,
+  evaluationStateByMissionId,
+  recommendedMissionId,
   selectedMissionId,
   lockedReasons,
   recenterRequest,
@@ -89,13 +98,15 @@ function QuestMapCanvas({
       type: 'quest',
       position: mission.position,
       draggable: false,
-      selectable: false,
+      selectable: true,
       connectable: false,
       focusable: false,
       zIndex: 3,
       data: {
         mission,
         progressState: progress[mission.id],
+        evaluationStatus: evaluationStateByMissionId[mission.id]?.status,
+        recommended: mission.id === recommendedMissionId,
         selected: mission.id === selectedMissionId,
         lockedReason: lockedReasons[mission.id],
         onSelect: onMissionSelect,
@@ -138,7 +149,15 @@ function QuestMapCanvas({
     )
 
     return [...territoryNodes, ...missionNodes, ...junctionNodes]
-  }, [chapter, lockedReasons, onMissionSelect, progress, selectedMissionId])
+  }, [
+    chapter,
+    evaluationStateByMissionId,
+    lockedReasons,
+    onMissionSelect,
+    progress,
+    recommendedMissionId,
+    selectedMissionId,
+  ])
 
   const edges = useMemo<QuestFlowEdge[]>(
     () => {

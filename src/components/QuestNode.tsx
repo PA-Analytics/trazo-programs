@@ -6,13 +6,15 @@ import {
   type Node,
   type NodeProps,
 } from '@xyflow/react'
-import type { Mission, ProgressState } from '../domain/course'
+import type { EvaluationStatus, Mission, ProgressState } from '../domain/course'
 import { nodeTypeLabels, progressLabels } from '../presentation/labels'
 import { MissionIcon, StateBadge } from './icons'
 
 export interface QuestNodeData extends Record<string, unknown> {
   mission: Mission
   progressState: ProgressState
+  evaluationStatus?: EvaluationStatus
+  recommended: boolean
   selected: boolean
   lockedReason?: string
   onSelect: (missionId: string) => void
@@ -22,19 +24,41 @@ export interface QuestNodeData extends Record<string, unknown> {
 export type QuestFlowNode = Node<QuestNodeData, 'quest'>
 
 export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNode>) {
-  const { mission, progressState, selected, lockedReason, onSelect, onHover } = data
+  const {
+    mission,
+    progressState,
+    evaluationStatus,
+    recommended,
+    selected,
+    lockedReason,
+    onSelect,
+    onHover,
+  } = data
   const { zoom } = useViewport()
   const detailLevel = zoom >= 0.62 ? 'standard' : zoom >= 0.42 ? 'overview' : 'far'
   const stateLabel = progressLabels[progressState]
   const typeLabel = nodeTypeLabels[mission.nodeType]
   const description = lockedReason ? ` ${lockedReason}` : ''
   const subtitle = mission.mapSubtitle ? ` ${mission.mapSubtitle}` : ''
+  const evaluationDescription =
+    evaluationStatus === 'evaluating'
+      ? ' Evidencia en evaluación.'
+      : evaluationStatus === 'rework'
+        ? ' La evidencia requiere ajustes.'
+        : evaluationStatus === 'clarify'
+          ? ' La evidencia necesita aclaración.'
+          : evaluationStatus === 'human_review'
+            ? ' La evidencia espera revisión humana.'
+            : ''
+  const recommendationDescription = recommended ? ' Recomendada por el Acompañante.' : ''
   const tooltipId = `mission-tooltip-${mission.id}`
 
   return (
     <div
       className={`quest-node-shell quest-node--${mission.nodeType}`}
       data-progress={progressState}
+      data-evaluation={evaluationStatus ?? 'idle'}
+      data-recommended={recommended}
       data-selected={selected}
       data-detail={detailLevel}
       data-role={mission.mapRole}
@@ -52,7 +76,7 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
         id={`mission-node-${mission.id}`}
         className="quest-node-button nodrag nopan"
         type="button"
-        aria-label={`${typeLabel}: ${mission.title}. Estado: ${stateLabel}.${subtitle}${description}`}
+        aria-label={`${typeLabel}: ${mission.title}. Estado: ${stateLabel}.${subtitle}${description}${evaluationDescription}${recommendationDescription}`}
         aria-describedby={tooltipId}
         aria-haspopup="dialog"
         aria-expanded={selected}
@@ -95,6 +119,11 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
           <span className="quest-node-cue" aria-hidden="true">
             <span />
             Aquí estás
+          </span>
+        )}
+        {recommended && (
+          <span className="quest-node-recommendation" aria-hidden="true">
+            Recomendado
           </span>
         )}
         <span id={tooltipId} className="quest-node-tooltip" role="tooltip">

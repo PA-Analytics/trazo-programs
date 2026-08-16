@@ -57,6 +57,7 @@ export function App() {
   const [evaluationStateByMissionId, setEvaluationStateByMissionId] = useState<
     Record<string, MissionEvaluationState>
   >({})
+  const [recommendedMissionId, setRecommendedMissionId] = useState<string | null>(null)
   const [recenterRequest, setRecenterRequest] = useState(0)
   const [announcement, setAnnouncement] = useState('')
 
@@ -151,6 +152,9 @@ export function App() {
   const selectedMission = activeChapter.missions.find(
     (mission) => mission.id === selectedMissionId,
   )
+  const activeMission = activeChapter.missions.find(
+    (mission) => mission.id === implementationState?.activeMissionId,
+  )
   const lockedReasons = useMemo(
     () =>
       Object.fromEntries(
@@ -170,6 +174,7 @@ export function App() {
   const handleChapterSelect = useCallback((chapter: Chapter) => {
     setActiveChapterId(chapter.id)
     setSelectedMissionId(null)
+    setRecommendedMissionId(null)
     setRecenterRequest((request) => request + 1)
   }, [])
 
@@ -347,10 +352,11 @@ export function App() {
       />
       <main className="map-stage">
         <HudBar
-          chapterTitle={activeChapter.title}
-          chapterPromise={activeChapter.mapPromise}
+          chapterNumber={activeChapter.shortTitle}
+          chapterTitle={activeChapter.title.replace(/^Chapter\s+\d+\s+·\s*/i, '')}
           completed={completedCount}
           total={activeChapter.missions.length}
+          activeMissionTitle={activeMission?.title}
           implementationId={implementationId}
           localSessionIds={localSessionIds}
           onRecenter={() => setRecenterRequest((request) => request + 1)}
@@ -360,6 +366,8 @@ export function App() {
         <QuestMap
           chapter={activeChapter}
           progress={progress}
+          evaluationStateByMissionId={evaluationStateByMissionId}
+          recommendedMissionId={recommendedMissionId}
           selectedMissionId={selectedMissionId}
           lockedReasons={lockedReasons}
           recenterRequest={recenterRequest}
@@ -373,6 +381,7 @@ export function App() {
             availableMissions={availableMissions}
             onStartMission={handleStartMission}
             onSelectMission={handleMissionSelect}
+            onRecommendationChange={setRecommendedMissionId}
           />
         )}
       </main>
