@@ -1,7 +1,16 @@
 import { course } from '../../data/course.ts'
-import type { ImplementationState, NextActionProposal } from '../../domain/course.ts'
+import type {
+  ImplementationState,
+  NextActionProposal,
+  NextActionTurn,
+} from '../../domain/course.ts'
 import { deriveMissionProgress } from '../../domain/progression.ts'
-import type { INextActionProposer, NextActionContext } from './types.ts'
+import type {
+  INextActionProposer,
+  NextActionContext,
+  NextActionLatencyTrace,
+  CompanionProfileContext,
+} from './types.ts'
 
 export class CompanionService {
   private proposer: INextActionProposer
@@ -21,6 +30,9 @@ export class CompanionService {
   async proposeNextAction(
     state: ImplementationState,
     clarification?: string | null,
+    recentDecisionTurns: NextActionTurn[] = [],
+    onLatencyTrace?: (trace: NextActionLatencyTrace) => void,
+    profile?: CompanionProfileContext,
   ): Promise<NextActionProposal> {
     const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
     const currentCompleted = new Set(state.completedMissionIds)
@@ -59,6 +71,9 @@ export class CompanionService {
       })),
       verifiedArtifacts: state.artifacts,
       clarificationAnswer: clarification?.trim() || null,
+      recentDecisionTurns,
+      profile,
+      onLatencyTrace,
     }
 
     const proposal = await this.proposer.proposeNextAction(context)

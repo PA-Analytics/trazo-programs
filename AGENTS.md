@@ -1,109 +1,153 @@
-# Multi-Agent Architecture & Team Playbook
+# TRAZO Multi-Agent Architecture & Team Playbook
 
-Este repositorio opera bajo una arquitectura de **Equipo Multi-Agente Agnóstico del Proveedor**. Cualquier asistente o entorno de desarrollo (Google Antigravity, OpenAI Codex, OpenCode, Cursor o scripts CLI) que interactúe con este código debe seguir los roles, la matriz de modelos y el protocolo de ejecución definidos en este documento.
+Este repositorio opera bajo una arquitectura de **Equipo Multi-Agente Agnóstico del Proveedor**. Cualquier asistente o entorno de desarrollo (Google Antigravity, OpenAI Codex, OpenCode, Cursor o scripts CLI) que interactúe con este código debe regirse por las reglas permanentes, heurísticas y contratos canónicos definidos en este documento.
 
 ---
 
-## 1. Matriz de Tiers, Modelos y Cuotas
+## 1. Reglas Permanentes de Operación (Invariantes)
 
-Para maximizar la velocidad y aprovechar al máximo las cuotas disponibles sin generar costos innecesarios, se define una estrategia de 3 niveles con **cero dependencia de Claude**:
+Estas 7 reglas son la constitución innegociable de desarrollo en TRAZO y aplican a todos los modelos, agentes y herramientas.
 
+### 1. Las Fronteras Canónicas Superan la Reinvención
+Antes de crear un nuevo runtime, ruta de persistencia, evaluador, modelo de identidad, almacén de artefactos o autoridad arquitectónica equivalente:
+- Inspecciona la implementación y el contrato canónico existente.
+- Consume esa ruta cuando satisfaga el requerimiento.
+- Si no puede satisfacerlo, reporta la limitación explícitamente.
+- **Nunca** crees silenciosamente una implementación paralela con autoridad sobre el estado.
+
+### 2. Build AI ≠ Product AI
+Los sistemas y herramientas de IA utilizados para construir, auditar o revisar TRAZO son estrictamente independientes de las capacidades de IA desplegadas dentro del producto final. Una instrucción de construcción como *"usa Gemini"* o *"usa Codex"* no autoriza la creación ni modificación del runtime de IA de producto. Cualquier cambio en Product AI debe solicitarse explícitamente y respetar [`docs/AI_RUNTIME_CONTRACT.md`](docs/AI_RUNTIME_CONTRACT.md).
+
+### 3. Interpretación Probabilística, Integridad Determinista
+Los modelos LLM pueden interpretar ambigüedad, evaluar evidencia contra rúbricas, procesar lenguaje y producir feedback/orientación. El código determinista de TRAZO es el único dueño de las consecuencias estructurales:
+- Aplicación de veredictos de política ([`src/domain/evaluationPolicy.ts`](src/domain/evaluationPolicy.ts)).
+- Transiciones legales y verificación de prerrequisitos ([`src/domain/progression.ts`](src/domain/progression.ts)).
+- Completado de misiones, desbloqueos en el grafo y progresión.
+
+### 4. El Estado de Dominio Autoritativo Vive en el Backend
+El estado canónico de progresión y dominio reside exclusivamente en el estado backend persistente ([`src/server/repository.ts`](src/server/repository.ts) / Firestore). El estado de frontend, estado de navegador y el historial de conversación controlan legítimamente aspectos de UX y presentación (ej. perfil activo, visualización del mapa), pero **no** establecen de forma independiente la verdad de la progresión.
+
+### 5. Un No-PASS No Puede Avanzar la Progresión
+Los resultados de `REWORK`, `CLARIFY`, `HUMAN_REVIEW`, `AMBIGUOUS`, `SYSTEM_ERROR` o fallos de runtime/proveedor pueden persistir la realidad ocurrida (intento de entrega, evidencia cruda, feedback devuelto, marcas de tiempo, conversación, traza de decisión e información de error). Sin embargo, **nunca** deben:
+- Completar la misión.
+- Desbloquear rutas o misiones posteriores.
+- Evadir prerrequisitos.
+- Representar al alumno como completado.
+- Crear artefactos canónicos posteriores ([`docs/PROGRESSION_ARTIFACT_CONTRACT.md`](docs/PROGRESSION_ARTIFACT_CONTRACT.md)).
+`PASS` es el único disparador de progresión consecuencial.
+
+### 6. La Incertidumbre Debe Emerger, No Inventarse
+Cuando los requerimientos, evidencia, identificadores, esquemas, arquitectura o significado semántico sean genuinamente insuficientes: **clarifica, pregunta, reporta o detén la ejecución**. Nunca inventes:
+- Reglas de negocio o comportamiento de proveedores.
+- IDs de misión o criterios de rúbrica inexistentes.
+- Evidencia no provista o significado para texto basura / corrupto.
+- Arquitectura ausente.
+Esta regla aplica tanto al comportamiento de agentes de código como a la lógica del producto.
+
+### 7. Las Declaraciones de Verificación Deben Coincidir con la Evidencia
+Los reportes de progreso y cierre de tareas deben distinguir estrictamente qué fue verificado utilizando el vocabulario estándar:
+- **`Implemented`:** Código o cambio escrito; no implica validación ejecutada.
+- **`Typechecked`:** Validación estática/tipos ejecutada con éxito (`npm run typecheck` / `tsc -b`).
+- **`Tested`:** Pruebas automatizadas ejecutadas con éxito (`npm test`). Reportar la suite o tests ejecutados.
+- **`Live-Local-Verified`:** Comportamiento ejecutado localmente contra las dependencias externas reales relevantes para la tarea (ej. Vertex AI ADC, Firestore).
+- **`Production-Verified`:** Comportamiento observado directamente contra la superficie de producción desplegada (Cloud Run).
+- **`Unverified`:** Superficie o reclamo no ejecutado o imposible de verificar en el entorno actual.
+Nunca infieras verificación de Firestore a partir de Vertex, verificación visual a partir de pruebas unitarias, o verificación de producción a partir de una compilación local.
+
+---
+
+## 2. Heurísticas Operativas (Juicio de Agente)
+
+A diferencia de los invariantes, estas directrices admiten adaptación justificada:
+
+- **Mínimo Útil de Agentes:** Usa el menor número de agentes que aporten valor significativamente distinto.
+  - *Tarea rutinaria/acotada:* Orquestador solo.
+  - *Construcción compleja:* Orquestador + opcionalmente un segundo constructor acotado.
+  - *Cierre consecuencial:* Opcionalmente un revisor independiente de otra familia de modelo/proveedor.
+  - *4+ agentes:* Requiere justificación explícita. Nunca generes enjambres de revisores redundantes para fabricar consenso artificial.
+- **Pase Adversarial Acotado:** Aplica un desafío adversarial cuando la decisión sea costosa, arquitectónica, ligada a seguridad/estado o difícil de revertir. Omítelo cuando el valor esperado sea bajo.
+- **Investigación Dirigida:** Sigue el bucle: *hipótesis $\rightarrow$ desafío adversarial $\rightarrow$ identificar incertidumbre crítica $\rightarrow$ investigar esa incertidumbre $\rightarrow$ actualizar decisión*. No ejecutes búsquedas amplias por defecto si la evidencia en el repositorio es suficiente.
+- **Verificación de Proveedor en Vivo:** Usa mocks y dependencias en memoria durante la iteración rápida. Ejecuta proveedores reales en hitos de cierre o cuando el comportamiento del proveedor sea el núcleo de la tarea.
+- **Verificación Visual Semántica:** Los cambios de UI/layout requieren renderizado e inspección visual. Las tareas puramente de backend o dominio no requieren capturas.
+- **Disciplina de Abstracción:** Prefiere implementaciones concretas. Crea una abstracción únicamente cuando elimine duplicación comprobada o proteja una frontera arquitectónica real.
+
+---
+
+## 3. Dirección Visual y Diseño
+
+El desarrollo de interfaz debe seguir la gramática del sistema de diseño de TRAZO y preservar la jerarquía visual semántica. Las reglas visuales, paleta y anti-patrones residen canónicamente en:
+- [`DESIGN.md`](DESIGN.md)
+- [`docs/brand/BRAND_SYSTEM.md`](docs/brand/BRAND_SYSTEM.md)
+- [`docs/brand/ANTI_PATTERNS.md`](docs/brand/ANTI_PATTERNS.md)
+
+---
+
+## 4. Contratos Canónicos del Repositorio
+
+1. **AI Runtime Contract:** [`docs/AI_RUNTIME_CONTRACT.md`](docs/AI_RUNTIME_CONTRACT.md) — Único runtime canónico de Gemini/Vertex (`src/server/ai/runtime.ts`), protocolo de validación ADC y manejo de fallos.
+2. **Progression & Artifact Contract:** [`docs/PROGRESSION_ARTIFACT_CONTRACT.md`](docs/PROGRESSION_ARTIFACT_CONTRACT.md) — Ciclo de vida de artefactos canónicos, producción exclusiva en `PASS` y consumo downstream.
+
+---
+
+## 5. Matriz de Roles y Proveedores (Pipeline)
+
+La asignación de perfiles y modelos se gestiona en [`.pipeline/config.json`](.pipeline/config.json) y el router [`.pipeline/audit.py`](.pipeline/audit.py).
+
+| Rol / Especialista | Propósito Principal |
+| :--- | :--- |
+| **👑 0. Orquestador / Integrador** | Analiza requerimientos, toma decisiones finales, integra cambios y lidera la construcción. |
+| **💻 1. Bounded Builder** | Implementa componentes o módulos acotados respetando contratos existentes. |
+| **🛡️ 2. Red Team / Auditor Independiente** | Audita código y arquitectura desde una familia de modelo independiente para evitar sesgo de confirmación. |
+| **🧪 3. Tester / QA** | Ejecuta suites de tests, verifica tipos y evalúa cobertura funcional. |
+
+### ⚠️ Nota Operativa: Stdin en Windows
+Los CLIs de `codex exec` y `opencode run` leen de `stdin` por defecto. Al invocarlos desde PowerShell/scripts:
+- En PowerShell: canalizar cierre de entrada (`echo "" | codex exec ...` / `echo "" | opencode run ...`).
+- En Python: pasar `input=""` y `shell=True` en `subprocess.run()`.
+- En general: usar el router automatizado `python .pipeline/audit.py --role <planner|red_team|tester|all> --prompt "..."`.
+
+---
+
+## 6. Plantilla Compacta de Tarea (Task-Spec Template)
+
+Para tareas complejas, utiliza esta estructura compacta. Las secciones irrelevantes (ej. Look & Feel en backend) pueden omitirse libremente:
+
+```markdown
+# TASK: [Título descriptivo]
+
+## ROLE
+[Constructor / Arquitecto / Auditor + frontera de autoridad]
+
+## GOAL
+[Resultado atómico deseado y criterios de aceptación]
+
+## NON-GOALS
+[Qué NO se debe construir, modificar ni tocar]
+
+## CONTEXT
+[Archivos relevantes y contratos canónicos por referencia]
+
+## BUILD AI
+[Modelo/herramienta de asistencia en construcción o revisión]
+
+## PRODUCT AI
+[NONE o especificación canónica vía src/server/ai/runtime.ts]
+
+## INVARIANTS
+[Restricciones específicas de la tarea más allá de los invariantes heredados]
+
+## LOOK & FEEL
+[Opcional: solo si aplica trabajo visual; referenciar DESIGN.md]
+
+## DELIVERABLES
+[Archivos concretos a crear o modificar]
+
+## VALIDATION
+[Nivel de verificación objetivo y comandos a ejecutar]
+
+## REVIEW
+[Opcional: especificar si requiere auditoría de modelo independiente]
+
+## STOP
+[Condición de parada y reporte]
 ```
-                     ┌─────────────────────────────────────────────────────────┐
-                     │ 👑 0. ORQUESTADOR (Hub Central)                         │
-                     │ Antigravity (Gemini 3.7 Flash) ó Codex (GPT-5.6 Luna)   │
-                     └──────────────┬────────────────────────────┬─────────────┘
-                                    │                            │
-             ┌──────────────────────┴──────┐              ┌──────┴─────────────────────┐
-             ▼                             ▼              ▼                            ▼
-   🎯 1. PLANNER / ARCHITECT     💻 2. DEVELOPER      🛡️ 3. RED TEAM (Auditor)    🧪 4. QA & A11Y
-   GPT-5.6 Terra / NIM GLM-5.2   Gemini 3.7 Flash     DeepSeek V4 Flash (Free)     MiMo V2.5 (Free)
-   (Crítico: GPT-5.6 Sol)        GPT-5.6 Luna         Nemotron Ultra (NIM)         Gemini 3.7 Flash
-```
-
-| Nivel | Modelos Asignados | Propósito y Política de Cuota |
-| :--- | :--- | :--- |
-| **🟢 Tier 0 (Free / Alta Cuota)** | • **Gemini 3.7 Flash** (Antigravity)<br>• **DeepSeek V4 Flash Free** (Open Zen)<br>• **MiMo V2.5 Free** (Open Zen) | **Caballo de batalla diario (80% del trabajo).** Gemini 3.7 Flash aprovecha la mayor cuota y máxima inteligencia (~61) para el desarrollo continuo. Open Zen Free se reserva exclusivamente para revisiones y Red Team sin sesgo de proveedor. |
-| **🟡 Tier 1 (Pro / Precisión)** | • **GPT-5.6 Terra** (OpenAI)<br>• **GPT-5.6 Luna** (OpenAI)<br>• **GLM-5.2 / Nemotron Ultra** (NVIDIA NIM) | **Arquitectura y tareas de alta precisión.** Luna ($0.05) para tareas rápidas y tipado; Terra y GLM-5.2 para decisiones arquitectónicas y diseño de contratos. |
-| **🔴 Tier 2 (Nuclear / Emergencia)** | • **GPT-5.6 Sol** (OpenAI) | **Uso quirúrgico exclusivo.** Reservado para desbloqueo de bugs arquitectónicos críticos o auditoría final antes de un release mayor. |
-
----
-
-## 2. Definición de Roles del Equipo
-
-### 👑 0. Orquestador (`orchestrator`)
-* **Responsabilidad:** Analiza los requerimientos del usuario, selecciona el Tier de ejecución, despacha tareas a los especialistas en el orden correcto y sintetiza los resultados.
-* **Skill Asociada:** [`.agents/skills/orchestrator/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/orchestrator/SKILL.md)
-* **Regla de Oro:** No ejecuta cambios destructivos sin previa validación.
-
-### 🎯 1. Planner / Arquitecto (`planner-architect`)
-* **Responsabilidad:** Diseña estructuras de datos, define el DAG de progresión educativa (cursos, capítulos, misiones, dependencias) y especifica contratos técnicos antes de programar.
-* **Skill Asociada:** [`.agents/skills/ux-architecture/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/ux-architecture/SKILL.md)
-
-### 💻 2. Developer (`developer`)
-* **Responsabilidad:** Implementa componentes modulares en React 19 + TypeScript + `@xyflow/react`, siguiendo los principios visuales de [`DESIGN.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/DESIGN.md).
-* **Skill Asociada:** [`.agents/skills/frontend-implementation/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/frontend-implementation/SKILL.md)
-
-### 🛡️ 3. Red Team / Auditor Adversarial (`red-team`)
-* **Responsabilidad:** Audita código y arquitectura buscando vulnerabilidades, inyecciones de prompts indirectas, fallas de validación, envenenamiento de estado y edge cases lógicos.
-* **Skill Asociada:** [`.agents/skills/red-team/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/red-team/SKILL.md)
-* **Regla de Oro:** **Siempre debe ser ejecutado por un modelo de familia distinta al Developer** (ej. si el Developer fue Gemini, el Red Team debe ser DeepSeek Free o GPT Terra) para evitar el sesgo de confirmación.
-
-### 🧪 4. Tester, QA & Accesibilidad (`tester-qa`)
-* **Responsabilidad:** Ejecuta linters, suites de tests (Playwright), audita la accesibilidad funcional (a11y, foco, teclado, contraste) y evalúa la calidad visual contra el "anti-slop".
-* **Skills Asociadas:** [`.agents/skills/accessibility/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/accessibility/SKILL.md) y [`.agents/skills/design-critique/SKILL.md`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.agents/skills/design-critique/SKILL.md)
-
-### 📝 5. Docs & Changelog (`docs-changelog`)
-* **Responsabilidad:** Mantiene actualizadas las especificaciones técnicas, registra commits semánticos y actualiza el historial de cambios.
-
----
-
-## 3. Protocolo del Bucle Continuo (5 Fases)
-
-Cada feature, cambio estructural o refactorización debe seguir este flujo iterativo:
-
-```mermaid
-graph TD
-    A[🎯 1. PLANNER: Especificación & DAG] -->|Diseño Aprobado| B[💻 2. DEVELOPER: Código & Tipos]
-    B -->|Código Generado| C[🧪 3. QA & A11Y: Validación de Suite]
-    C -->|Tests Exitosos| D[🛡️ 4. RED TEAM: Auditoría Adversarial]
-    D -->|¿Encontró hallazgos P0/P1?| E{Hallazgos?}
-    E -->|Sí: Tickets de Corrección| B
-    E -->|No: Sistema Seguro| F[📝 5. DOCS: Changelog & Commit]
-```
-
-1. **Fase 1 (Planner):** Produce el plan de ejecución y contratos de tipos.
-2. **Fase 2 (Developer):** Escribe el código modular y tipado.
-3. **Fase 3 (QA & a11y):** Ejecuta `npm run typecheck`, verifica navegación por teclado y contraste.
-4. **Fase 4 (Red Team):** Prueba inyecciones indirectas en inputs/payloads, mutaciones ilegales de estado y emite tickets P0–P3. Si hay fallos críticos, el Developer los resuelve antes de cerrar la tarea.
-5. **Fase 5 (Docs):** Registra el changelog y finaliza el ciclo.
-
----
-
-## 4. Configuración Agnóstica de Proveedores
-
-Los perfiles de ejecución y modelos activos se configuran en [`.pipeline/config.json`](file:///c:/Proyectos/acompa%C3%B1ante%20de%20ia/.pipeline/config.json).
-Cualquier script o wrapper CLI debe consultar ese archivo para resolver los endpoints y modelos actuales.
-
----
-
-## 5. Protocolo de Invocación CLI (Router Pipeline)
-
-Cualquier modelo o asistente que necesite invocar a los especialistas CLI debe respetar las siguientes directrices técnicas para evitar bloqueos por `stdin` en entornos Windows/PowerShell:
-
-### ⚠️ Regla Crítica de Stdin en Windows
-Los binarios de `codex exec` y `opencode run` leen por defecto del flujo estándar de entrada (`stdin`). Si se ejecutan sin redirección, el proceso se quedará esperando indefinidamente (`Reading additional input from stdin...`).
-* **En PowerShell / Terminal:** Siempre canalizar un cierre de entrada:  
-  `echo "" | codex exec ...` o `echo "" | opencode run ...`
-* **En Scripts de Python:** Siempre pasar `input=""` y `shell=True` en `subprocess.run()`.
-* **Vía Router Automatizado:** Ejecutar `python .pipeline/audit.py --role <planner|red_team|tester|all> --prompt "..."`.
-
-### Comandos Canónicos de Invocación
-
-| Rol / Especialista | Proveedor | Comando Canónico CLI |
-| :--- | :--- | :--- |
-| **🎯 1. Planner / Architect** | **OpenAI Codex** | `echo "" \| codex exec --sandbox read-only -m gpt-5.6-luna "<prompt>"` |
-| **🛡️ 3. Red Team Auditor** | **OpenCode Zen** | `echo "" \| opencode run -m opencode/deepseek-v4-flash-free "<prompt>"` |
-| **🧪 4. Tester / QA** | **OpenCode Zen** | `echo "" \| opencode run -m opencode/mimo-v2.5-free "<prompt>"` |
-| **🛡️ 3. Red Team (Tier 2 NIM)** | **NVIDIA NIM / OpenCode** | `echo "" \| opencode run -m nvidia/z-ai/glm-5.2 "<prompt>"` |
-

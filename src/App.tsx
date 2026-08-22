@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChapterNavigation } from './components/ChapterNavigation'
-import { CompanionNextAction } from './components/CompanionNextAction'
 import { HudBar } from './components/HudBar'
 import { MissionPanel } from './components/MissionPanel'
 import { QuestMap } from './components/QuestMap'
+import { CreatorCalibrationView } from './components/CreatorCalibrationView'
+import { CoachIntro } from './components/CoachIntro'
+import { IdentityEntry } from './components/IdentityEntry'
+import { LearnerQuickSetup } from './components/LearnerQuickSetup'
+import { RoleGateway } from './components/RoleGateway'
+import { ProfileSelection, ProfileSwitcher } from './components/ProfileSwitcher'
 import { course } from './data/course'
 import type {
   Chapter,
@@ -11,11 +16,17 @@ import type {
   ImplementationState,
   Mission,
   MissionEvaluationState,
+  MissionInteractionTurn,
 } from './domain/course'
+import type { UserProfile } from './domain/identity'
 import {
   deriveMissionProgress,
   formatLockedReason,
 } from './domain/progression'
+import {
+  isSystemEvaluationError,
+  normalizeSubmissionFailure,
+} from './presentation/missionEvaluation'
 import type { SubmissionResponseDTO } from './server/types'
 
 function getPrerequisiteSummary(mission: Mission, chapter: Chapter) {
@@ -34,42 +45,120 @@ function getPrerequisiteSummary(mission: Mission, chapter: Chapter) {
 }
 
 export function App() {
+  const [activeUserId, setActiveUserId] = useState(() => localStorage.getItem('trazo_active_user_id') || '')
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(() => Boolean(localStorage.getItem('trazo_active_user_id')))
   const [activeChapterId, setActiveChapterId] = useState(course.chapters[0].id)
-  const [implementationId, setImplementationId] = useState(() => {
-    return localStorage.getItem('trazo_session_id') || 'demo-implementation-1'
-  })
-  const [localSessionIds, setLocalSessionIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem('trazo_local_sessions')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    } catch {}
-    const initial = localStorage.getItem('trazo_session_id') || 'demo-implementation-1'
-    return [initial]
-  })
+  const [implementationId, setImplementationId] = useState('')
   const [implementationState, setImplementationState] = useState<ImplementationState | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
   const [evidenceByMissionId, setEvidenceByMissionId] = useState<Record<string, string>>({})
   const [evaluationStateByMissionId, setEvaluationStateByMissionId] = useState<
     Record<string, MissionEvaluationState>
   >({})
+  const [interactionHistoryByMissionId, setInteractionHistoryByMissionId] = useState<
+    Record<string, MissionInteractionTurn[]>
+  >({})
   const [recommendedMissionId, setRecommendedMissionId] = useState<string | null>(null)
   const [recenterRequest, setRecenterRequest] = useState(0)
   const [announcement, setAnnouncement] = useState('')
+  const [showProfileSelection, setShowProfileSelection] = useState(false)
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+
+  useEffect(() => {
+    if (!activeUserId) {
+      setProfile(null)
+      setProfileLoading(false)
+      return
+    }
+
+    setProfileLoading(true)
+    void fetch(`/api/v1/profiles/${encodeURIComponent(activeUserId)}`)
+      .then(async (response) => {
+        if (response.status === 404) {
+          localStorage.removeItem('trazo_active_user_id')
+          setActiveUserId('')
+          return null
+        }
+        if (!response.ok) throw new Error('No se pudo cargar tu perfil.')
+        return (await response.json()) as UserProfile
+      })
+      .then((data) => {
+        if (data) setProfile(data)
+      })
+      .catch(() => setServerError('No se pudo cargar tu perfil. Intenta de nuevo.'))
+      .finally(() => setProfileLoading(false))
+  }, [activeUserId])
+
+  useEffect(() => {
+    if (profile?.role === 'learner' && profile.learnerImplementationId) {
+      setImplementationId(profile.learnerImplementationId)
+    }
+  }, [profile?.learnerImplementationId, profile?.role])
+
+  const resetProfileScopedState = useCallback(() => {
+    setActiveChapterId(course.chapters[0].id)
+    setImplementationId('')
+    setImplementationState(null)
+    setSelectedMissionId(null)
+    setEvidenceByMissionId({})
+    setEvaluationStateByMissionId({})
+    setInteractionHistoryByMissionId({})
+    setRecommendedMissionId(null)
+    setRecenterRequest(0)
+    setAnnouncement('')
+    setServerError(null)
+  }, [])
+
+  const handleIdentityComplete = useCallback((createdProfile: UserProfile) => {
+    resetProfileScopedState()
+    localStorage.setItem('trazo_active_user_id', createdProfile.userId)
+    setActiveUserId(createdProfile.userId)
+    setProfile(createdProfile)
+    setProfileLoading(false)
+    setIsCreatingProfile(false)
+    setShowProfileSelection(false)
+  }, [resetProfileScopedState])
+
+  const handleProfileSelect = useCallback((userId: string) => {
+    if (!userId || userId === activeUserId) {
+      setShowProfileSelection(false)
+      return
+    }
+    resetProfileScopedState()
+    localStorage.setItem('trazo_active_user_id', userId)
+    setActiveUserId(userId)
+    setProfile(null)
+    setProfileLoading(true)
+    setShowProfileSelection(false)
+    setIsCreatingProfile(false)
+  }, [activeUserId, resetProfileScopedState])
+
+  const handleRoleComplete = useCallback((updatedProfile: UserProfile) => {
+    setProfile(updatedProfile)
+    if (updatedProfile.learnerImplementationId) setImplementationId(updatedProfile.learnerImplementationId)
+  }, [])
+
+  const withProfileSwitcher = (content: ReactNode) => (
+    <>
+      <ProfileSwitcher profile={profile!} onOpen={() => setShowProfileSelection(true)} />
+      {content}
+    </>
+  )
 
   const loadImplementation = useCallback(async () => {
+    if (!profile || profile.role !== 'learner' || !implementationId) return
     setIsLoading(true)
     setServerError(null)
     try {
-      let res = await fetch(`/api/v1/implementations/${implementationId}`)
+      const headers = { 'X-Trazo-User-Id': profile.userId }
+      let res = await fetch(`/api/v1/implementations/${implementationId}`, { headers })
       if (res.status === 404) {
         res = await fetch('/api/v1/implementations', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({
             id: implementationId,
             courseId: course.id,
@@ -83,50 +172,16 @@ export function App() {
       }
       const data: ImplementationState = await res.json()
       setImplementationState(data)
-      localStorage.setItem('trazo_session_id', implementationId)
-      setLocalSessionIds((prev) => {
-        if (!prev.includes(implementationId)) {
-          const updated = [implementationId, ...prev]
-          localStorage.setItem('trazo_local_sessions', JSON.stringify(updated))
-          return updated
-        }
-        return prev
-      })
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo conectar con el servidor backend'
-      setServerError(message)
+    } catch {
+      setServerError('No se pudo conectar con el estado de aprendizaje. Intenta de nuevo.')
     } finally {
       setIsLoading(false)
     }
-  }, [implementationId])
+  }, [implementationId, profile])
 
   useEffect(() => {
     void loadImplementation()
   }, [loadImplementation])
-
-  const handleNewSession = useCallback(() => {
-    const newId = `trazo-${Math.random().toString(36).substring(2, 8)}-${Date.now().toString(36).slice(-4)}`
-    setImplementationId(newId)
-    setLocalSessionIds((prev) => {
-      const updated = [newId, ...prev.filter((id) => id !== newId)]
-      localStorage.setItem('trazo_local_sessions', JSON.stringify(updated))
-      return updated
-    })
-    setSelectedMissionId(null)
-    setEvidenceByMissionId({})
-    setEvaluationStateByMissionId({})
-    setAnnouncement(`Nueva sesión iniciada: ${newId}`)
-  }, [])
-
-  const handleSelectLocalSession = useCallback((targetId: string) => {
-    const cleanId = targetId.trim()
-    if (!cleanId) return
-    setImplementationId(cleanId)
-    setSelectedMissionId(null)
-    setEvidenceByMissionId({})
-    setEvaluationStateByMissionId({})
-    setAnnouncement(`Cambiando a sesión: ${cleanId}`)
-  }, [])
 
   const completedMissionIds = useMemo(
     () => new Set(implementationState?.completedMissionIds ?? []),
@@ -199,7 +254,7 @@ export function App() {
       try {
         const res = await fetch(`/api/v1/implementations/${implementationId}/start-mission`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Trazo-User-Id': profile?.userId ?? '' },
           body: JSON.stringify({ missionId }),
         })
 
@@ -214,19 +269,19 @@ export function App() {
         const missionTitle =
           activeChapter.missions.find((m) => m.id === missionId)?.title ?? missionId
         setAnnouncement(`Misión activa iniciada: ${missionTitle}`)
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Error al iniciar misión'
-        setAnnouncement(`Error: ${message}`)
+      } catch {
+        setAnnouncement('No se pudo iniciar la misión. Intenta de nuevo.')
       }
     },
-    [activeChapter.missions, implementationId],
+    [activeChapter.missions, implementationId, profile?.userId],
   )
 
   const handleSubmitEvidence = useCallback(
     async (missionId: string) => {
-      if (!['available', 'active', 'submitted'].includes(progress[missionId])) return
+      if (!['available', 'active', 'submitted', 'completed'].includes(progress[missionId])) return
       const evidenceText = evidenceByMissionId[missionId]?.trim()
       if (!evidenceText) return
+      const recentInteraction = interactionHistoryByMissionId[missionId]?.slice(-4) ?? []
 
       // Set evaluating UI state
       setEvaluationStateByMissionId((current) => ({
@@ -238,40 +293,68 @@ export function App() {
         // TASK-004: Real Verified Action Submission Pipeline
         const res = await fetch(`/api/v1/implementations/${implementationId}/submissions`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Trazo-User-Id': profile?.userId ?? '' },
           body: JSON.stringify({
             missionId,
             evidence: {
               type: 'text',
               text: evidenceText,
             },
+            recentInteraction,
           }),
         })
 
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}))
-          throw new Error(errorData.error || `Error del servidor (${res.status}): ${res.statusText}`)
+          const errorData: unknown = await res.json().catch(() => null)
+          const responseCode =
+            typeof errorData === 'object' && errorData !== null && 'code' in errorData
+              ? (errorData as { code?: unknown }).code
+              : undefined
+          throw normalizeSubmissionFailure(res.status, responseCode)
         }
 
         const data: SubmissionResponseDTO = await res.json()
 
-        // Update evaluation state in UI
-        const statusMap: Record<string, EvaluationStatus> = {
-          PASS: 'pass',
-          CLARIFY: 'clarify',
-          REWORK: 'rework',
-          HUMAN_REVIEW: 'human_review',
+        const interactionType = data.interactionType || 'EVIDENCE_SUBMISSION'
+        let evalStatus: EvaluationStatus = 'system_error'
+
+        if (interactionType === 'CONVERSATION') {
+          evalStatus = 'conversation'
+        } else if (interactionType === 'AMBIGUOUS') {
+          evalStatus = 'ambiguous'
+        } else {
+          const statusMap = {
+            PASS: 'pass',
+            CLARIFY: 'clarify',
+            REWORK: 'rework',
+            HUMAN_REVIEW: 'human_review',
+          } as const
+          evalStatus = statusMap[data.policyVerdict] || 'system_error'
         }
-        const evalStatus = statusMap[data.policyVerdict] || 'error'
 
         setEvaluationStateByMissionId((current) => ({
           ...current,
           [missionId]: {
             status: evalStatus,
+            interactionType,
+            message: data.message,
             evaluation: data.evaluation,
             policyVerdict: data.policyVerdict,
           },
         }))
+        const companionMessage = data.message || data.evaluation?.coachingFeedback
+        setInteractionHistoryByMissionId((current) => ({
+          ...current,
+          [missionId]: [
+            ...(current[missionId] ?? []),
+            { role: 'learner' as const, content: evidenceText },
+            ...(companionMessage ? [{ role: 'companion' as const, content: companionMessage }] : []),
+          ].slice(-6),
+        }))
+
+        if (interactionType === 'CONVERSATION' || interactionType === 'AMBIGUOUS' || data.completed) {
+          setEvidenceByMissionId((current) => ({ ...current, [missionId]: '' }))
+        }
 
         // IF PASS: Apply authoritative updated state returned from backend (NO OPTIMISTIC COMPLETION)
         if (data.completed) {
@@ -296,37 +379,116 @@ export function App() {
         } else {
           // IF NOT PASS: Implementation state is NOT mutated; announce coaching feedback
           setAnnouncement(
-            data.evaluation?.coachingFeedback ||
+            data.message ||
+              data.evaluation?.coachingFeedback ||
               `El Acompañante solicita ajustes (${data.policyVerdict}).`,
           )
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Error al evaluar evidencia'
+        const systemError = isSystemEvaluationError(err)
+          ? err
+          : normalizeSubmissionFailure()
         setEvaluationStateByMissionId((current) => ({
           ...current,
           [missionId]: {
-            status: 'error',
-            errorMessage: message,
+            status: 'system_error',
+            systemError,
           },
         }))
-        setAnnouncement(`Error: ${message}`)
+        setAnnouncement('No pude verificar esto ahora. Tu evidencia sigue disponible.')
       }
     },
-    [activeChapter.missions, evidenceByMissionId, implementationId, progress],
+    [
+      activeChapter.missions,
+      evidenceByMissionId,
+      implementationId,
+      interactionHistoryByMissionId,
+      profile?.userId,
+      progress,
+    ],
   )
 
-  if (isLoading) {
+  if (!activeUserId) {
+    return <IdentityEntry onComplete={handleIdentityComplete} />
+  }
+
+  if (showProfileSelection && profile) {
     return (
-      <div className="app-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
-        <p style={{ color: 'var(--trazo-ink)', fontStyle: 'italic' }}>
-          Cargando estado de implementación desde el backend...
-        </p>
+      <ProfileSelection
+        activeProfileId={profile.userId}
+        onSelect={handleProfileSelect}
+        onCreate={() => {
+          setShowProfileSelection(false)
+          setIsCreatingProfile(true)
+        }}
+        onClose={() => setShowProfileSelection(false)}
+      />
+    )
+  }
+
+  if (isCreatingProfile) {
+    return <IdentityEntry onComplete={handleIdentityComplete} onCancel={() => setIsCreatingProfile(false)} />
+  }
+
+  if (profileLoading) {
+    return <div className="entry-shell"><p className="entry-loading">Cargando tu recorrido…</p></div>
+  }
+
+  if (!profile) {
+    return (
+      <div className="entry-shell">
+        <div className="entry-card" role="alert">
+          <p className="entry-kicker">TRAZO</p>
+          <h1>No pudimos cargar tu recorrido</h1>
+          <p className="entry-copy">{serverError ?? 'Intenta cargar tu perfil otra vez.'}</p>
+          <button
+            type="button"
+            className="entry-primary-button"
+            onClick={() => {
+              setServerError(null)
+              setProfileLoading(true)
+              void fetch(`/api/v1/profiles/${encodeURIComponent(activeUserId)}`)
+                .then(async (response) => {
+                  if (!response.ok) throw new Error('No se pudo cargar tu perfil.')
+                  return (await response.json()) as UserProfile
+                })
+                .then(setProfile)
+                .catch(() => setServerError('No se pudo cargar tu perfil. Intenta de nuevo.'))
+                .finally(() => setProfileLoading(false))
+            }}
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     )
   }
 
+  if (!profile.role) {
+    return withProfileSwitcher(<RoleGateway profile={profile} onComplete={handleRoleComplete} />)
+  }
+
+  if (profile.role === 'coach' && !profile.coachSetup) {
+    return withProfileSwitcher(<CoachIntro profile={profile} onComplete={setProfile} />)
+  }
+
+  if (profile.role === 'coach') {
+    const calibrationMission = course.chapters[0].missions.find((mission) => mission.id === 'N01') ?? course.chapters[0].missions[0]
+    return withProfileSwitcher(<CreatorCalibrationView userId={profile.userId} initialMode={profile.coachSetup?.calibrationMode} mission={calibrationMission} />)
+  }
+
+  if (isLoading) {
+    return withProfileSwitcher(
+      <div className="app-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
+        <p style={{ color: 'var(--trazo-ink)', fontStyle: 'italic' }}>
+          Cargando estado de implementación desde el backend...
+        </p>
+      </div>,
+    )
+  }
+
   if (serverError) {
-    return (
+    return withProfileSwitcher(
       <div className="app-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
         <div style={{ maxWidth: 480, textAlign: 'center' }}>
           <h2 style={{ color: 'var(--trazo-ink)' }}>Error de conexión con el backend</h2>
@@ -339,11 +501,15 @@ export function App() {
             Reintentar conexión
           </button>
         </div>
-      </div>
+      </div>,
     )
   }
 
-  return (
+  if (!implementationState?.learnerSetup) {
+    return withProfileSwitcher(<LearnerQuickSetup userId={profile.userId} implementationId={implementationId} onComplete={setImplementationState} />)
+  }
+
+  return withProfileSwitcher(
     <div className="app-shell">
       <ChapterNavigation
         course={course}
@@ -357,13 +523,10 @@ export function App() {
           completed={completedCount}
           total={activeChapter.missions.length}
           activeMissionTitle={activeMission?.title}
-          implementationId={implementationId}
-          localSessionIds={localSessionIds}
           onRecenter={() => setRecenterRequest((request) => request + 1)}
-          onNewSession={handleNewSession}
-          onSelectLocalSession={handleSelectLocalSession}
         />
         <QuestMap
+          userId={profile.userId}
           chapter={activeChapter}
           progress={progress}
           evaluationStateByMissionId={evaluationStateByMissionId}
@@ -372,18 +535,14 @@ export function App() {
           lockedReasons={lockedReasons}
           recenterRequest={recenterRequest}
           onMissionSelect={handleMissionSelect}
+          implementationId={implementationId}
+          availableMissions={availableMissions}
+          onStartMission={handleStartMission}
+          onRecommendationChange={setRecommendedMissionId}
+          activeMissionId={activeMission?.id}
+          isEvaluating={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.status === 'evaluating' : false}
+          isVerifiedAction={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.policyVerdict === 'PASS' : false}
         />
-
-        {/* Companion Next Action Guidance Bar (TASK-006) */}
-        {!selectedMissionId && availableMissions.length > 1 && (
-          <CompanionNextAction
-            implementationId={implementationId}
-            availableMissions={availableMissions}
-            onStartMission={handleStartMission}
-            onSelectMission={handleMissionSelect}
-            onRecommendationChange={setRecommendedMissionId}
-          />
-        )}
       </main>
 
       {selectedMission && (
@@ -394,6 +553,7 @@ export function App() {
           lockedReason={lockedReasons[selectedMission.id]}
           prerequisiteSummary={getPrerequisiteSummary(selectedMission, activeChapter)}
           evidence={evidenceByMissionId[selectedMission.id] ?? ''}
+          interactionHistory={interactionHistoryByMissionId[selectedMission.id] ?? []}
           evaluationState={evaluationStateByMissionId[selectedMission.id]}
           artifacts={implementationState?.artifacts}
           onClose={handleClosePanel}
@@ -405,6 +565,6 @@ export function App() {
       <div className="visually-hidden" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
-    </div>
+    </div>,
   )
 }

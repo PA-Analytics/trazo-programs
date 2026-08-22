@@ -12,7 +12,7 @@ import type { ImplementationState } from '../src/domain/course.ts'
 import type { SubmissionResponseDTO } from '../src/server/types.ts'
 import { n01Fixtures } from './fixtures/n01Fixtures.ts'
 
-const runLive = process.env.RUN_LIVE_GEMINI === 'true' && Boolean(process.env.GEMINI_API_KEY)
+const runLive = process.env.RUN_LIVE_GEMINI === 'true' && (Boolean(process.env.GEMINI_API_KEY) || Boolean(process.env.GOOGLE_CLOUD_PROJECT))
 
 test('Live E2E: Real Gemini Verified Action submission loop', { skip: !runLive }, async () => {
   const repository = new MemoryImplementationRepository()

@@ -1,8 +1,9 @@
 import { Firestore } from '@google-cloud/firestore'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import type { ImplementationState } from '../domain/course.ts'
-import type { IImplementationRepository } from './types.ts'
+import type { CreatorCalibration, ImplementationState } from '../domain/course.ts'
+import type { UserProfile } from '../domain/identity.ts'
+import type { ICalibrationRepository, IImplementationRepository, IProfileRepository } from './types.ts'
 
 export type StorageBackendType = 'firestore' | 'filestorage' | 'memory'
 
@@ -57,6 +58,42 @@ export class FirestoreImplementationRepository implements IImplementationReposit
   async delete(id: string): Promise<void> {
     const docRef = this.firestore.collection(this.collectionName).doc(id)
     await docRef.delete()
+  }
+}
+
+export class FirestoreProfileRepository implements IProfileRepository {
+  private firestore: Firestore
+  private collectionName = 'user_profiles'
+
+  constructor(firestoreOrOptions?: Firestore | { projectId?: string; databaseId?: string }) {
+    if (firestoreOrOptions && 'collection' in firestoreOrOptions) {
+      this.firestore = firestoreOrOptions
+    } else {
+      const projectId = firestoreOrOptions?.projectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT
+      const databaseId = firestoreOrOptions?.databaseId || process.env.FIRESTORE_DATABASE_ID
+      this.firestore = new Firestore({
+        ...(projectId ? { projectId } : {}),
+        ...(databaseId ? { databaseId } : {}),
+        ignoreUndefinedProperties: true,
+      })
+    }
+  }
+
+  async getById(userId: string): Promise<UserProfile | null> {
+    const doc = await this.firestore.collection(this.collectionName).doc(userId).get()
+    return doc.exists ? (doc.data() as UserProfile) : null
+  }
+
+  async save(profile: UserProfile): Promise<void> {
+    await this.firestore.collection(this.collectionName).doc(profile.userId).set(
+      JSON.parse(JSON.stringify(profile)),
+      { merge: true },
+    )
+  }
+
+  async list(): Promise<UserProfile[]> {
+    const snapshot = await this.firestore.collection(this.collectionName).get()
+    return snapshot.docs.map((doc) => doc.data() as UserProfile)
   }
 }
 
@@ -117,6 +154,49 @@ export class FileStorageImplementationRepository implements IImplementationRepos
   }
 }
 
+export class FileStorageProfileRepository implements IProfileRepository {
+  private filePath: string
+  private cache: Map<string, UserProfile> = new Map()
+
+  constructor(filePath?: string) {
+    this.filePath = filePath || path.join(process.cwd(), '.data', 'user-profiles.json')
+    this.load()
+  }
+
+  private load() {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, 'utf-8')
+        this.cache = new Map(Object.entries(JSON.parse(raw) as Record<string, UserProfile>))
+      }
+    } catch {
+      this.cache = new Map()
+    }
+  }
+
+  private persist() {
+    const dir = path.dirname(this.filePath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(this.filePath, JSON.stringify(Object.fromEntries(this.cache.entries()), null, 2), 'utf-8')
+  }
+
+  async getById(userId: string) {
+    this.load()
+    const profile = this.cache.get(userId)
+    return profile ? structuredClone(profile) : null
+  }
+
+  async save(profile: UserProfile) {
+    this.cache.set(profile.userId, structuredClone(profile))
+    this.persist()
+  }
+
+  async list() {
+    this.load()
+    return Array.from(this.cache.values()).map((profile) => structuredClone(profile))
+  }
+}
+
 /**
  * In-Memory Implementation Repository
  * For fast, isolated unit testing.
@@ -136,6 +216,134 @@ export class MemoryImplementationRepository implements IImplementationRepository
 
   async list(): Promise<ImplementationState[]> {
     return Array.from(this.storage.values()).map((v) => structuredClone(v))
+  }
+}
+
+export class MemoryProfileRepository implements IProfileRepository {
+  private storage: Map<string, UserProfile> = new Map()
+
+  async getById(userId: string) {
+    const profile = this.storage.get(userId)
+    return profile ? structuredClone(profile) : null
+  }
+
+  async save(profile: UserProfile) {
+    this.storage.set(profile.userId, structuredClone(profile))
+  }
+
+  async list() {
+    return Array.from(this.storage.values()).map((profile) => structuredClone(profile))
+  }
+}
+
+export class FirestoreCalibrationRepository implements ICalibrationRepository {
+  private firestore: Firestore
+  private collectionName = 'creator_calibrations'
+
+  constructor(firestoreOrOptions?: Firestore | { projectId?: string; databaseId?: string }) {
+    if (firestoreOrOptions && 'collection' in firestoreOrOptions) {
+      this.firestore = firestoreOrOptions
+    } else {
+      const projectId =
+        firestoreOrOptions?.projectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT
+      const databaseId = firestoreOrOptions?.databaseId || process.env.FIRESTORE_DATABASE_ID
+      this.firestore = new Firestore({
+        ...(projectId ? { projectId } : {}),
+        ...(databaseId ? { databaseId } : {}),
+        ignoreUndefinedProperties: true,
+      })
+    }
+  }
+
+  async getByMissionId(missionId: string, userId?: string): Promise<CreatorCalibration | null> {
+    const key = userId ? `${userId}:${missionId}` : missionId
+    const doc = await this.firestore.collection(this.collectionName).doc(key).get()
+    if (doc.exists) return doc.data() as CreatorCalibration
+    if (userId) return null
+    const matches = await this.firestore.collection(this.collectionName).where('missionId', '==', missionId).limit(1).get()
+    return matches.empty ? null : (matches.docs[0].data() as CreatorCalibration)
+  }
+
+  async save(calibration: CreatorCalibration): Promise<void> {
+    const key = calibration.userId ? `${calibration.userId}:${calibration.missionId}` : calibration.missionId
+    await this.firestore
+      .collection(this.collectionName)
+      .doc(key)
+      .set(JSON.parse(JSON.stringify(calibration)), { merge: true })
+  }
+
+  async list(): Promise<CreatorCalibration[]> {
+    const snapshot = await this.firestore.collection(this.collectionName).get()
+    return snapshot.docs.map((doc) => doc.data() as CreatorCalibration)
+  }
+}
+
+export class FileStorageCalibrationRepository implements ICalibrationRepository {
+  private filePath: string
+  private cache: Map<string, CreatorCalibration> = new Map()
+
+  constructor(filePath?: string) {
+    this.filePath = filePath || path.join(process.cwd(), '.data', 'creator-calibrations.json')
+    this.load()
+  }
+
+  private load(): void {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, 'utf-8')
+        const data = JSON.parse(raw) as Record<string, CreatorCalibration>
+        this.cache = new Map(Object.entries(data))
+      }
+    } catch {
+      this.cache = new Map()
+    }
+  }
+
+  private persist(): void {
+    const dir = path.dirname(this.filePath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      this.filePath,
+      JSON.stringify(Object.fromEntries(this.cache.entries()), null, 2),
+      'utf-8',
+    )
+  }
+
+  async getByMissionId(missionId: string, userId?: string): Promise<CreatorCalibration | null> {
+    this.load()
+    const value = this.cache.get(userId ? `${userId}:${missionId}` : missionId)
+      ?? (!userId ? Array.from(this.cache.values()).find((item) => item.missionId === missionId) : undefined)
+    return value ? structuredClone(value) : null
+  }
+
+  async save(calibration: CreatorCalibration): Promise<void> {
+    const key = calibration.userId ? `${calibration.userId}:${calibration.missionId}` : calibration.missionId
+    this.cache.set(key, structuredClone(calibration))
+    this.persist()
+  }
+
+  async list(): Promise<CreatorCalibration[]> {
+    this.load()
+    return Array.from(this.cache.values()).map((value) => structuredClone(value))
+  }
+}
+
+export class MemoryCalibrationRepository implements ICalibrationRepository {
+  private storage: Map<string, CreatorCalibration> = new Map()
+
+  async getByMissionId(missionId: string, userId?: string): Promise<CreatorCalibration | null> {
+    const value = this.storage.get(userId ? `${userId}:${missionId}` : missionId)
+      ?? (!userId ? Array.from(this.storage.values()).find((item) => item.missionId === missionId) : undefined)
+    return value ? structuredClone(value) : null
+  }
+
+  async save(calibration: CreatorCalibration): Promise<void> {
+    const key = calibration.userId ? `${calibration.userId}:${calibration.missionId}` : calibration.missionId
+    this.storage.set(key, structuredClone(calibration))
+  }
+
+  async list(): Promise<CreatorCalibration[]> {
+    return Array.from(this.storage.values()).map((value) => structuredClone(value))
   }
 }
 
@@ -169,4 +377,18 @@ export function createImplementationRepository(backendType?: StorageBackendType)
   }
 
   return new FileStorageImplementationRepository()
+}
+
+export function createCalibrationRepository(backendType?: StorageBackendType): ICalibrationRepository {
+  const selected = backendType || getStorageBackendType()
+  if (selected === 'firestore') return new FirestoreCalibrationRepository()
+  if (selected === 'memory') return new MemoryCalibrationRepository()
+  return new FileStorageCalibrationRepository()
+}
+
+export function createProfileRepository(backendType?: StorageBackendType): IProfileRepository {
+  const selected = backendType || getStorageBackendType()
+  if (selected === 'firestore') return new FirestoreProfileRepository()
+  if (selected === 'memory') return new MemoryProfileRepository()
+  return new FileStorageProfileRepository()
 }

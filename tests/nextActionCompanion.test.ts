@@ -11,8 +11,10 @@ import type { INextActionProposer, NextActionContext } from '../src/server/compa
 
 class MockProposer implements INextActionProposer {
   public responseGenerator?: (context: NextActionContext) => NextActionProposal
+  public callCount = 0
 
   async proposeNextAction(context: NextActionContext): Promise<NextActionProposal> {
+    this.callCount += 1
     if (this.responseGenerator) {
       return this.responseGenerator(context)
     }
@@ -391,6 +393,70 @@ test('H. TWO LEARNERS: Same methodology, different preferences yield distinct mi
       assert.equal(propB.missionId, 'N03')
       assert.notEqual(propA.missionId, propB.missionId)
     }
+  } finally {
+    server.close()
+  }
+})
+
+test('I. BOUNDED DECISION CONTEXT: Previous TRAZO question and newest learner reply reach one model call', async () => {
+  const proposer = new MockProposer()
+  proposer.responseGenerator = (ctx) => {
+    assert.equal(ctx.clarificationAnswer, 'sexo')
+    assert.deepEqual(ctx.recentDecisionTurns, [
+      { role: 'learner', content: 'se ignora por limite' },
+      { role: 'companion', content: 'Quieres ir directo o contar una historia?' },
+    ])
+    assert.deepEqual(ctx.completedMissionIds, ['N01'])
+    assert.equal(ctx.activeMissionId, undefined)
+    assert.deepEqual(ctx.availableMissions.map((mission) => mission.id), ['N02', 'N03'])
+    assert.equal(
+      (ctx.verifiedArtifacts?.premise as { value?: { statement?: string } })?.value?.statement,
+      'Premisa verificada',
+    )
+    return {
+      type: 'ASK_CLARIFICATION',
+      question: 'Eso no me aclara la estructura. Vamos al grano o lo contamos como historia?',
+      rationale: 'Hace falta elegir formato.',
+    }
+  }
+
+  const { server, repository } = createServer({ mockProposer: proposer })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+
+  try {
+    const state: ImplementationState = {
+      id: 'impl-conversation-context',
+      courseId: course.id,
+      completedMissionIds: ['N01'],
+      artifacts: {
+        premise: {
+          key: 'premise',
+          sourceMissionId: 'N01',
+          value: { statement: 'Premisa verificada' },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    await repository.save(state)
+
+    const response = await request(server, `/api/v1/implementations/${state.id}/next-action`, {
+      method: 'POST',
+      body: {
+        clarification: 'sexo',
+        recentDecisionTurns: [
+          { role: 'learner', content: 'se ignora por limite' },
+          { role: 'companion', content: 'Quieres ir directo o contar una historia?' },
+        ],
+      },
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(proposer.callCount, 1)
+    const reloaded = await repository.getById(state.id)
+    assert.deepEqual(reloaded, state)
   } finally {
     server.close()
   }

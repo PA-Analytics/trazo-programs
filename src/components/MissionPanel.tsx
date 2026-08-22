@@ -3,10 +3,12 @@ import type {
   ImplementationArtifact,
   Mission,
   MissionEvaluationState,
+  MissionInteractionTurn,
   PremiseArtifactValue,
   ProgressState,
 } from '../domain/course'
 import { nodeTypeLabels, progressLabels } from '../presentation/labels'
+import { getMissionEvaluationPresentation } from '../presentation/missionEvaluation'
 import { CloseIcon, MissionIcon } from './icons'
 
 interface MissionPanelProps {
@@ -15,6 +17,7 @@ interface MissionPanelProps {
   lockedReason?: string
   prerequisiteSummary?: string
   evidence: string
+  interactionHistory: MissionInteractionTurn[]
   evaluationState?: MissionEvaluationState
   artifacts?: Record<string, ImplementationArtifact>
   onClose: () => void
@@ -22,14 +25,13 @@ interface MissionPanelProps {
   onSubmitEvidence: (missionId: string) => void
 }
 
-const completableStates: ProgressState[] = ['available', 'active', 'submitted']
-
 export function MissionPanel({
   mission,
   progressState,
   lockedReason,
   prerequisiteSummary,
   evidence,
+  interactionHistory,
   evaluationState,
   artifacts,
   onClose,
@@ -43,8 +45,15 @@ export function MissionPanel({
   const [closing, setClosing] = useState(false)
 
   const isEvaluating = evaluationState?.status === 'evaluating'
-  const canComplete = completableStates.includes(progressState)
+  const canInteract = progressState !== 'locked'
   const hasEvidence = evidence.trim().length > 0
+  const evaluationPresentation = getMissionEvaluationPresentation({
+    evidence,
+    progressState,
+    evaluationState,
+  })
+  const showEvaluationFeedback =
+    evaluationPresentation.state !== 'editing' && evaluationPresentation.state !== 'ready'
 
   const evidenceFieldId = `mission-evidence-${mission.id}`
   const evidenceCriteriaId = `mission-evidence-criteria-${mission.id}`
@@ -104,6 +113,14 @@ export function MissionPanel({
   const premiseStatement = (premiseArtifact?.value as PremiseArtifactValue)?.statement
   const rubricLabelById = new Map(
     mission.rubric?.criteria.map((criterion) => [criterion.id, criterion.label]),
+  )
+  const historyWithoutCurrentReply = interactionHistory.filter(
+    (turn, index) =>
+      !(
+        index === interactionHistory.length - 1 &&
+        turn.role === 'companion' &&
+        turn.content === evaluationState?.message
+      ),
   )
 
   return (
@@ -192,12 +209,23 @@ export function MissionPanel({
 
       <section className="evidence-section" aria-labelledby="evidence-heading">
         <div className="evidence-section__heading">
-          <h3 id="evidence-heading">Evidencia de misión</h3>
+          <h3 id="evidence-heading">Trabajo con el acompañante</h3>
         </div>
         <label htmlFor={evidenceFieldId}>{mission.evidencePrompt}</label>
         <p id={evidenceCriteriaId} className="evidence-section__criteria">
           <strong>Criterio:</strong> {mission.evidenceCriteria}
         </p>
+
+        {historyWithoutCurrentReply.length > 0 && (
+          <ol className="mission-conversation" aria-label="Conversación reciente con TRAZO">
+            {historyWithoutCurrentReply.map((turn, index) => (
+              <li key={`${turn.role}-${index}`} data-role={turn.role}>
+                <span>{turn.role === 'learner' ? 'Tú' : 'TRAZO'}</span>
+                <p>{turn.content}</p>
+              </li>
+            ))}
+          </ol>
+        )}
 
         {mission.evidenceType === 'url' ? (
           <input
@@ -208,7 +236,7 @@ export function MissionPanel({
             autoComplete="url"
             placeholder="https://"
             value={evidence}
-            readOnly={progressState === 'completed' || isEvaluating}
+            readOnly={isEvaluating}
             disabled={progressState === 'locked'}
             aria-describedby={`${evidenceCriteriaId} ${evidenceHelpId}`}
             onChange={(event) => onEvidenceChange(mission.id, event.target.value)}
@@ -218,99 +246,123 @@ export function MissionPanel({
             id={evidenceFieldId}
             className="evidence-field evidence-field--text"
             rows={5}
-            placeholder="Escribe aquí tu evidencia…"
+            placeholder="Escribe tu avance, duda o mensaje para TRAZO…"
             value={evidence}
-            readOnly={progressState === 'completed' || isEvaluating}
+            readOnly={isEvaluating}
             disabled={progressState === 'locked'}
             aria-describedby={`${evidenceCriteriaId} ${evidenceHelpId}`}
             onChange={(event) => onEvidenceChange(mission.id, event.target.value)}
           />
         )}
-        <p id={evidenceHelpId} className="evidence-section__help">
+        <p
+          id={evidenceHelpId}
+          className="evidence-section__help"
+          data-evaluation-state={evaluationPresentation.state}
+        >
           {progressState === 'locked'
-            ? 'Podrás añadir evidencia cuando desbloquees esta misión.'
-            : isEvaluating
-              ? 'El Acompañante está evaluando tu evidencia...'
-              : progressState === 'completed'
-                ? 'Evidencia verificada y persistida en el servidor.'
-                : hasEvidence
-                  ? 'Evidencia lista para verificar.'
-                  : 'Añade evidencia para habilitar la entrega.'}
+            ? 'Podrás interactuar cuando desbloquees esta misión.'
+            : evaluationPresentation.evidenceHelp}
         </p>
       </section>
 
       {/* Companion Feedback & Evaluation Results Section */}
-      {evaluationState && evaluationState.status !== 'idle' && (
+      {evaluationState && showEvaluationFeedback && (
         <section
           className="companion-feedback-section"
-          data-status={evaluationState.status}
+          data-status={evaluationPresentation.state}
           aria-labelledby="companion-feedback-heading"
         >
           <div className="companion-feedback-header">
             <span className="companion-feedback-icon" aria-hidden="true">
-              {evaluationState.status === 'evaluating'
-                ? '⏳'
-                : evaluationState.status === 'pass'
+              {evaluationPresentation.state === 'evaluating'
+                ? '…'
+                : evaluationPresentation.state === 'verified'
                   ? '✓'
-                  : evaluationState.status === 'clarify'
-                    ? '⚡'
-                    : evaluationState.status === 'rework'
-                      ? '✍️'
-                      : evaluationState.status === 'human_review'
-                        ? 'ℹ️'
-                        : '⚠️'}
+                  : evaluationPresentation.state === 'conversation'
+                    ? '💬'
+                    : evaluationPresentation.state === 'ambiguous'
+                      ? '?'
+                      : evaluationPresentation.state === 'clarify'
+                        ? '?'
+                        : evaluationPresentation.state === 'rework'
+                          ? '↺'
+                          : evaluationPresentation.state === 'human_review'
+                            ? 'i'
+                            : '!'}
             </span>
             <h3 id="companion-feedback-heading">
-              {evaluationState.status === 'evaluating' && 'Evaluando evidencia...'}
-              {evaluationState.status === 'pass' && 'Acción Verificada: Aprobada'}
-              {evaluationState.status === 'clarify' && 'Aclaración Solicitada'}
-              {evaluationState.status === 'rework' && 'Ajuste Requerido'}
-              {evaluationState.status === 'human_review' && 'Revisión Manual'}
-              {evaluationState.status === 'error' && 'Error de Evaluación'}
+              {evaluationPresentation.feedbackTitle}
             </h3>
           </div>
 
-          {evaluationState.status === 'evaluating' && (
-            <p className="companion-feedback-evaluating">
-              El Acompañante está analizando tu texto contra los criterios de la rúbrica...
-            </p>
-          )}
+          <div className="companion-feedback-body">
+            {(evaluationState.message || evaluationState.evaluation?.coachingFeedback) ? (
+              <p className="companion-feedback-summary">
+                {evaluationState.message || evaluationState.evaluation?.coachingFeedback}
+              </p>
+            ) : evaluationPresentation.feedbackCopy ? (
+              <p
+                className={
+                  evaluationPresentation.state === 'system_error'
+                    ? 'companion-feedback-error'
+                    : 'companion-feedback-evaluating'
+                }
+              >
+                {evaluationPresentation.feedbackCopy}
+              </p>
+            ) : null}
 
-          {evaluationState.evaluation && (
-            <div className="companion-feedback-body">
-              <blockquote className="companion-feedback-quote">
-                "{evaluationState.evaluation.coachingFeedback}"
-              </blockquote>
+            {evaluationPresentation.state === 'verified' && (
+              <p className="companion-feedback-next-step">
+                Continúa con la siguiente misión disponible en el mapa.
+              </p>
+            )}
 
-              {evaluationState.evaluation.criteria.length > 0 && (
-                <div className="companion-criteria-list">
-                  <h4>Criterios evaluados:</h4>
+            {evaluationPresentation.state !== 'evaluating' &&
+              evaluationPresentation.state !== 'conversation' &&
+              evaluationPresentation.state !== 'ambiguous' &&
+              (evaluationState.evaluation?.criteria?.length ?? 0) > 0 && (
+                <details className="companion-feedback-details">
+                  <summary>Ver por qué</summary>
                   <ul>
-                    {evaluationState.evaluation.criteria.map((c) => (
-                      <li key={c.criterionId} data-verdict={c.status}>
-                        <span className="criterion-badge" data-verdict={c.status}>
-                          {c.status === 'PASS'
-                            ? 'Cumple'
-                            : c.status === 'NOT_MET'
-                              ? 'Por ajustar'
-                              : 'Aclara'}
-                        </span>
-                        <div className="criterion-info">
-                          <strong>{rubricLabelById.get(c.criterionId) ?? 'Criterio'}:</strong> {c.rationale}
-                        </div>
+                    {evaluationState.evaluation!.criteria.map((criterion) => (
+                      <li key={criterion.criterionId}>
+                        <strong>{rubricLabelById.get(criterion.criterionId) ?? 'Detalle'}:</strong>{' '}
+                        {criterion.rationale}
                       </li>
                     ))}
                   </ul>
-                </div>
+                </details>
               )}
-            </div>
-          )}
+          </div>
 
-          {evaluationState.errorMessage && (
-            <p className="companion-feedback-error">{evaluationState.errorMessage}</p>
-          )}
+          {evaluationPresentation.state === 'system_error' &&
+            import.meta.env.DEV &&
+            evaluationState.systemError?.debugCode && (
+              <details className="companion-feedback-debug">
+                <summary>Detalles técnicos</summary>
+                <code>{evaluationState.systemError.debugCode}</code>
+              </details>
+            )}
         </section>
       )}
+
+      {evaluationPresentation.state === 'verified' &&
+        artifacts?.premise &&
+        mission.producesArtifacts?.includes('premise') && (
+          <section
+            className="mission-prior-artifact mission-produced-artifact"
+            aria-labelledby="produced-artifact-heading"
+          >
+            <h3 id="produced-artifact-heading">Progreso guardado</h3>
+            <p>Esta evidencia creó una premisa verificada para las siguientes misiones.</p>
+            {typeof (artifacts.premise.value as PremiseArtifactValue)?.statement === 'string' && (
+              <blockquote className="mission-prior-artifact__quote">
+                "{(artifacts.premise.value as PremiseArtifactValue).statement}"
+              </blockquote>
+            )}
+          </section>
+        )}
 
       <div className="mission-panel__action">
         {progressState === 'locked' && (
@@ -334,7 +386,7 @@ export function MissionPanel({
           </p>
         )}
 
-        {canComplete && (
+        {canInteract && (
           <button
             type="button"
             className="submit-evidence-button"
@@ -343,11 +395,7 @@ export function MissionPanel({
             onClick={() => onSubmitEvidence(mission.id)}
           >
             <span>
-              {isEvaluating
-                ? 'Verificando con Acompañante…'
-                : evaluationState?.status === 'rework' || evaluationState?.status === 'clarify'
-                  ? 'Reenviar evidencia'
-                  : 'Verificar acción'}
+              {evaluationPresentation.submitLabel}
             </span>
             <span className="submit-evidence-button__mark" aria-hidden="true">
               {isEvaluating ? '⏳' : '→'}

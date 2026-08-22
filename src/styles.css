@@ -1,3 +1,5 @@
+@import './styles/companion.css';
+
 :root {
   color: var(--trazo-ink);
   background: var(--trazo-bg);
@@ -1977,6 +1979,40 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.companion-decision-thread {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.companion-decision-thread li {
+  padding-left: 10px;
+  border-left: 2px solid var(--trazo-border);
+}
+
+.companion-decision-thread li[data-role="companion"] {
+  border-left-color: var(--trazo-action);
+}
+
+.companion-decision-thread span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--trazo-muted);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.companion-decision-thread p {
+  margin: 0;
+  color: var(--trazo-ink);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .companion-rationale {
   margin: 0 0 12px;
   color: var(--trazo-muted);
@@ -2176,71 +2212,6 @@ textarea:focus-visible {
 }
 
 /* ==========================================================================
-   SESSION CONTROLS & MULTI-USER EXPERIENCE (TASK-009)
-   ========================================================================== */
-
-.hud-bar__session {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 12px;
-}
-
-.hud-session-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: var(--trazo-bg);
-  border: var(--trazo-border-width-hairline) solid var(--trazo-line);
-  border-radius: 4px;
-  font-family: var(--trazo-font-mono, monospace);
-  font-size: 11px;
-  color: var(--trazo-muted);
-}
-
-.hud-session-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--trazo-indigo);
-  display: inline-block;
-}
-
-.hud-session-select {
-  padding: 3px 6px;
-  font-family: var(--trazo-font-mono, monospace);
-  font-size: 11px;
-  color: var(--trazo-ink);
-  background: var(--trazo-bg);
-  border: var(--trazo-border-width-hairline) solid var(--trazo-line);
-  border-radius: 4px;
-  cursor: pointer;
-  outline: none;
-}
-
-.hud-session-select:focus-visible {
-  border-color: var(--trazo-ink);
-}
-
-.hud-session-btn {
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--trazo-ink);
-  background: var(--trazo-paper);
-  border: var(--trazo-border-width-hairline) solid var(--trazo-line);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--trazo-motion-fast, 150ms) ease;
-}
-
-.hud-session-btn:hover {
-  background: var(--trazo-bg);
-  border-color: var(--trazo-ink);
-}
-
-/* ==========================================================================
    COMPANION INTERACTIVE CHIPS (TASK-009)
    ========================================================================== */
 
@@ -2414,27 +2385,6 @@ textarea:focus-visible {
 .hud-button:hover,
 .mission-panel__close:hover,
 .map-control:hover:not(:disabled) {
-  background: var(--trazo-ink);
-  border-color: var(--trazo-ink);
-}
-
-.hud-session-badge,
-.hud-session-select,
-.hud-session-btn {
-  color: var(--trazo-ink);
-  background: var(--trazo-surface);
-  border: 1px solid var(--trazo-ink);
-  border-radius: var(--trazo-radius-sm);
-  font-family: var(--trazo-font-ui);
-  font-weight: 650;
-}
-
-.hud-session-dot {
-  background: var(--trazo-indigo);
-}
-
-.hud-session-btn:hover {
-  color: var(--trazo-paper);
   background: var(--trazo-ink);
   border-color: var(--trazo-ink);
 }
@@ -2939,21 +2889,6 @@ textarea:focus-visible {
   background: var(--trazo-indigo);
 }
 
-.criterion-badge {
-  color: var(--trazo-ink);
-  background: var(--trazo-paper);
-  border: 1px solid var(--trazo-ink);
-  border-radius: var(--trazo-radius-sm);
-}
-
-.criterion-badge[data-verdict="PASS"] {
-  color: var(--trazo-paper);
-  background: var(--trazo-indigo);
-  border-color: var(--trazo-ink);
-}
-
-.criterion-badge[data-verdict="NOT_MET"],
-.criterion-badge[data-verdict="UNVERIFIABLE"],
 .companion-feedback-error,
 .companion-next-action-error {
   color: var(--trazo-ink);
@@ -3001,8 +2936,7 @@ textarea:focus-visible {
     font-size: 1.3rem;
   }
 
-  .hud-bar__title,
-  .hud-bar__session {
+  .hud-bar__title {
     display: none;
   }
 
@@ -3018,4 +2952,447 @@ textarea:focus-visible {
   .hud-bar__current {
     display: none;
   }
+}
+
+/* MAP POLISH ROUND 2: tactile depth and environmental territory layers. */
+.quest-map .react-flow__pane {
+  background-color: var(--trazo-paper);
+  background-image: radial-gradient(rgb(20 26 22 / 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.territory {
+  z-index: 0;
+}
+
+.territory::before {
+  position: absolute;
+  inset: 10px 12px 22px;
+  z-index: -1;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--trazo-ink) 10%, transparent);
+  border-radius: 42% 58% 52% 48% / 38% 44% 56% 62%;
+  background: color-mix(in srgb, var(--trazo-surface) 48%, var(--trazo-paper));
+  content: "";
+  opacity: 0.72;
+  transform: rotate(-1deg);
+}
+
+.territory--field::before {
+  inset: 18px 8px 12px 18px;
+  border-color: color-mix(in srgb, var(--trazo-ink) 8%, transparent);
+  border-radius: 54% 46% 42% 58% / 44% 56% 48% 52%;
+  background: color-mix(in srgb, var(--trazo-paper-shadow) 30%, var(--trazo-paper));
+  transform: rotate(2deg);
+}
+
+.territory--market::before {
+  inset: 8px 4px 18px 14px;
+  border-color: color-mix(in srgb, var(--trazo-indigo) 12%, var(--trazo-ink));
+  border-radius: 48% 52% 58% 42% / 56% 42% 58% 44%;
+  background: color-mix(in srgb, var(--trazo-surface-2) 26%, var(--trazo-paper));
+  transform: rotate(-3deg);
+}
+
+.territory__contours {
+  z-index: 1;
+  opacity: 0.16;
+}
+
+.territory--field .territory__contours {
+  opacity: 0.18;
+}
+
+.territory--market .territory__contours {
+  opacity: 0.22;
+}
+
+.territory__label {
+  z-index: 2;
+  padding-top: 8px;
+  border-top: 2px solid color-mix(in srgb, var(--trazo-ink) 22%, transparent);
+}
+
+.territory--field .territory__label {
+  border-top-color: color-mix(in srgb, var(--trazo-ink) 16%, transparent);
+}
+
+.territory--market .territory__label {
+  border-top-color: color-mix(in srgb, var(--trazo-ink) 20%, transparent);
+}
+
+.quest-node-shell {
+  --node-size: 96px;
+}
+
+.quest-node--optional {
+  --node-size: 80px;
+}
+
+.quest-node-shell[data-role="entry"],
+.quest-node-shell[data-role="convergence"] {
+  --node-size: 112px;
+}
+
+.quest-node--milestone {
+  --node-size: 176px;
+}
+
+.quest-node-depth {
+  background: var(--trazo-ink);
+  border-radius: 50%;
+  box-shadow: 0 8px 12px -6px color-mix(in srgb, var(--trazo-ink) 58%, transparent);
+  transform: translateY(5px);
+  transition:
+    transform var(--trazo-motion-fast) var(--trazo-ease-standard),
+    background-color var(--trazo-motion-fast) var(--trazo-ease-standard),
+    box-shadow var(--trazo-motion-fast) var(--trazo-ease-standard);
+}
+
+.quest-node-shape {
+  color: var(--trazo-ink);
+  background: var(--trazo-surface);
+  border: 2px solid var(--trazo-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(241 241 236 / 0.88),
+    inset 0 -4px 5px color-mix(in srgb, var(--trazo-ink) 10%, transparent),
+    0 2px 0 color-mix(in srgb, var(--trazo-ink) 20%, transparent);
+}
+
+.quest-node-button:hover .quest-node-shape {
+  animation: none;
+  transform: translateY(-2px);
+}
+
+.quest-node-button:hover .quest-node-depth {
+  box-shadow: 0 10px 16px -6px color-mix(in srgb, var(--trazo-ink) 62%, transparent);
+  transform: translateY(5px);
+}
+
+.quest-node-button:active .quest-node-shape {
+  transform: translateY(3px);
+}
+
+.quest-node-button:active .quest-node-depth {
+  box-shadow: 0 5px 8px -6px color-mix(in srgb, var(--trazo-ink) 52%, transparent);
+  transform: translateY(4px);
+}
+
+.quest-node--optional .quest-node-depth {
+  transform: translateY(4px);
+}
+
+.quest-node--optional .quest-node-button:hover .quest-node-shape {
+  transform: translateY(-2px);
+}
+
+.quest-node--optional .quest-node-button:active .quest-node-shape {
+  transform: translateY(2.5px);
+}
+
+.quest-node--optional .quest-node-button:active .quest-node-depth {
+  transform: translateY(3px);
+}
+
+.quest-node--milestone .quest-node-depth {
+  background: var(--trazo-ink);
+  border-radius: 50%;
+  box-shadow: 0 12px 18px -8px color-mix(in srgb, var(--trazo-ink) 64%, transparent);
+  transform: translateY(6px);
+}
+
+.quest-node--milestone .quest-node-shape {
+  color: var(--trazo-ink);
+  background: var(--trazo-surface);
+  border: 2px solid var(--trazo-ink);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 1px 0 rgb(241 241 236 / 0.88),
+    inset 0 -5px 7px color-mix(in srgb, var(--trazo-ink) 11%, transparent),
+    0 3px 0 color-mix(in srgb, var(--trazo-ink) 24%, transparent);
+}
+
+.quest-node--milestone .quest-node-button:hover .quest-node-shape {
+  transform: translateY(-2px);
+}
+
+.quest-node--milestone .quest-node-button:active .quest-node-shape {
+  transform: translateY(3px);
+}
+
+.quest-node--milestone .quest-node-button:active .quest-node-depth {
+  box-shadow: 0 7px 10px -7px color-mix(in srgb, var(--trazo-ink) 58%, transparent);
+  transform: translateY(4px);
+}
+
+.quest-node-shell[data-progress="locked"] .quest-node-depth {
+  background: var(--trazo-paper-shadow);
+  box-shadow: 0 7px 11px -7px color-mix(in srgb, var(--trazo-stone-dark) 42%, transparent);
+  transform: translateY(4px);
+}
+
+.quest-node-shell[data-progress="locked"] .quest-node-shape {
+  border-width: 2px;
+}
+
+.quest-node-shell[data-progress="available"] .quest-node-depth,
+.quest-node-shell[data-progress="completed"] .quest-node-depth {
+  background: var(--trazo-indigo);
+  box-shadow: 0 8px 13px -7px color-mix(in srgb, var(--trazo-indigo) 56%, transparent);
+}
+
+.quest-node-shell[data-progress="available"] .quest-node-shape {
+  border-width: 2px;
+}
+
+.quest-node-shell[data-role="entry"][data-progress="available"] .quest-node-shape {
+  border-width: 2px;
+}
+
+.quest-node-shell[data-progress="active"] .quest-node-depth {
+  background: var(--trazo-indigo);
+  box-shadow: 0 9px 14px -7px color-mix(in srgb, var(--trazo-indigo) 62%, transparent);
+  transform: translateY(5px);
+}
+
+.quest-node-shell[data-progress="active"] .quest-node-shape {
+  background: var(--trazo-indigo);
+  border: 2px solid var(--trazo-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(241 241 236 / 0.58),
+    inset 0 -4px 6px rgb(20 26 22 / 0.16),
+    0 2px 0 rgb(20 26 22 / 0.24);
+}
+
+.quest-node-shell[data-progress="submitted"] .quest-node-shape {
+  border-width: 2px;
+}
+
+.quest-node-shell[data-progress="completed"] .quest-node-shape {
+  border-width: 2px;
+}
+
+.quest-node--milestone[data-progress="locked"] .quest-node-depth {
+  background: var(--trazo-paper-shadow);
+  transform: translateY(5px);
+}
+
+.quest-node--milestone[data-progress="locked"] .quest-node-shape {
+  border-color: var(--trazo-stone);
+}
+
+.quest-node--milestone[data-progress="active"] .quest-node-depth,
+.quest-node--milestone[data-progress="completed"] .quest-node-depth {
+  background: var(--trazo-indigo);
+  box-shadow: 0 13px 19px -8px color-mix(in srgb, var(--trazo-indigo) 60%, transparent);
+}
+
+.quest-node--milestone[data-progress="active"] .quest-node-shape,
+.quest-node--milestone[data-progress="completed"] .quest-node-shape {
+  background: var(--trazo-indigo);
+  border: 2px solid var(--trazo-ink);
+}
+
+.quest-node--milestone[data-progress="locked"] .quest-node-shape {
+  background: var(--trazo-paper);
+}
+
+.mission-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.quest-node--optional .mission-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.quest-node--milestone .mission-icon {
+  width: 60px;
+  height: 60px;
+}
+
+.quest-node-destination-rings {
+  inset: -34px;
+}
+
+.quest-node-destination-rings > span {
+  border-color: var(--trazo-indigo);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.quest-node-destination-rings > span:first-child {
+  inset: 27px;
+  border-width: 2px;
+  border-style: solid;
+  opacity: 0.76;
+  transform: rotate(24deg);
+}
+
+.quest-node-destination-rings > span:last-child {
+  inset: 4px;
+  border-width: 1px;
+  border-style: dashed;
+  opacity: 0.34;
+  transform: rotate(74deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quest-node-button:hover .quest-node-shape,
+  .quest-node-button:active .quest-node-shape,
+  .quest-node-button:hover .quest-node-depth,
+  .quest-node-button:active .quest-node-depth {
+    transform: none;
+  }
+}
+
+.evidence-section__help[data-evaluation-state="ready"] {
+  color: var(--trazo-ink);
+  font-weight: 650;
+}
+
+.evidence-section__help[data-evaluation-state="system_error"] {
+  color: var(--trazo-ink);
+}
+
+.companion-feedback-section[data-status="verified"] .companion-feedback-icon {
+  background: var(--trazo-indigo);
+}
+
+.companion-feedback-section[data-status="human_review"] {
+  border-style: dashed;
+}
+
+.companion-feedback-section[data-status="system_error"] {
+  background: var(--trazo-paper);
+  border-color: var(--trazo-ink);
+}
+
+.companion-feedback-debug {
+  margin-top: 12px;
+  color: var(--trazo-muted);
+  font-size: 0.72rem;
+}
+
+.companion-feedback-debug summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.companion-feedback-debug code {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--trazo-ink);
+}
+
+/* Learner feedback stays concise; criterion detail is intentionally disclosed on demand. */
+.companion-feedback-body {
+  display: grid;
+  gap: 12px;
+}
+
+.companion-feedback-summary,
+.companion-feedback-next-step {
+  margin: 0;
+  color: var(--trazo-ink);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.companion-feedback-summary {
+  font-weight: 650;
+}
+
+.companion-feedback-details ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.companion-feedback-next-step {
+  color: var(--trazo-muted);
+}
+
+.companion-feedback-details {
+  margin-top: 2px;
+  color: var(--trazo-muted);
+  font-size: 0.8rem;
+}
+
+.companion-feedback-details summary {
+  width: fit-content;
+  color: var(--trazo-ink);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.companion-feedback-details ul {
+  margin-top: 10px;
+}
+
+.companion-feedback-details li {
+  line-height: 1.4;
+}
+
+.companion-feedback-details strong {
+  color: var(--trazo-ink);
+  font-weight: 700;
+}
+
+/* A bounded exchange keeps the mission grounded without turning the panel into a chat product. */
+.mission-conversation {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  list-style: none;
+  border-bottom: 1px solid var(--trazo-line);
+}
+
+.mission-conversation li {
+  display: grid;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid var(--trazo-line);
+}
+
+.mission-conversation li[data-role="companion"] {
+  border-left-color: var(--trazo-indigo);
+}
+
+.mission-conversation span {
+  color: var(--trazo-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mission-conversation p {
+  margin: 0;
+  color: var(--trazo-ink);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.mission-produced-artifact {
+  margin: 8px 0 16px;
+}
+
+.mission-produced-artifact h3 {
+  margin: 0;
+  color: var(--trazo-ink);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mission-produced-artifact p {
+  margin: 6px 0 10px;
+  color: var(--trazo-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
 }

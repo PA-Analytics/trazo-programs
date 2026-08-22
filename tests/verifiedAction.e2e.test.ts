@@ -276,7 +276,11 @@ test('F. MALFORMED MODEL OUTPUT: Invalid output schema fails closed with zero st
       body: { missionId: 'N01', evidence: 'alguna evidencia' },
     })
 
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 502)
+    assert.deepEqual(res.data, {
+      code: 'EVALUATION_RESPONSE_INVALID',
+      error: 'La evaluación no se pudo completar.',
+    })
     // Verify state remained untouched
     const checkRes = await request(server, `/api/v1/implementations/${impl.id}`)
     const state = checkRes.data as ImplementationState
@@ -307,7 +311,11 @@ test('G. MODEL FAILURE: Interpreter exception fails closed without state change'
       body: { missionId: 'N01', evidence: 'test' },
     })
 
-    assert.equal(res.status, 500)
+    assert.equal(res.status, 503)
+    assert.deepEqual(res.data, {
+      code: 'MODEL_UNAVAILABLE',
+      error: 'La evaluación no está disponible en este momento.',
+    })
     const checkRes = await request(server, `/api/v1/implementations/${impl.id}`)
     const state = checkRes.data as ImplementationState
     assert.deepEqual(state.completedMissionIds, [])
@@ -421,8 +429,46 @@ test('J. LOCKED MISSION: Submitting evidence for a locked mission (N09) is rejec
     })
 
     assert.equal(res.status, 400)
-    const body = res.data as { error: string }
-    assert.match(body.error, /mission is currently locked/)
+    assert.deepEqual(res.data, {
+      code: 'SUBMISSION_INVALID',
+      error: 'No se pudo enviar esta evidencia.',
+    })
+  } finally {
+    server.close()
+  }
+})
+
+test('K. VERTEX AUTH FAILURE: Auth details are not returned to the learner', async () => {
+  const interpreter = new MockInterpreter()
+  interpreter.responseGenerator = () => {
+    throw new Error('invalid_grant: reauth related error (invalid_rapt)')
+  }
+
+  const { server } = createE2EServer({ mockInterpreter: interpreter })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+
+  try {
+    const createRes = await request(server, '/api/v1/implementations', {
+      method: 'POST',
+      body: { courseId: course.id },
+    })
+    const impl = createRes.data as ImplementationState
+
+    const res = await request(server, `/api/v1/implementations/${impl.id}/submissions`, {
+      method: 'POST',
+      body: { missionId: 'N01', evidence: 'Una evidencia de prueba.' },
+    })
+
+    assert.equal(res.status, 503)
+    assert.deepEqual(res.data, {
+      code: 'VERTEX_AUTHENTICATION_FAILED',
+      error: 'La evaluación no está disponible en este momento.',
+    })
+    assert.doesNotMatch(JSON.stringify(res.data), /invalid_grant|invalid_rapt|reauth/i)
+
+    const checkRes = await request(server, `/api/v1/implementations/${impl.id}`)
+    const state = checkRes.data as ImplementationState
+    assert.deepEqual(state.completedMissionIds, [])
   } finally {
     server.close()
   }

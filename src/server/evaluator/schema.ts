@@ -1,6 +1,7 @@
 import type {
   CriterionResult,
   CriterionVerdict,
+  MissionInteractionType,
   Rubric,
   StructuredEvidenceEvaluation,
 } from '../../domain/course.ts'
@@ -25,14 +26,20 @@ const ALLOWED_RECOMMENDATIONS: ReadonlySet<string> = new Set([
   'HUMAN_REVIEW',
 ])
 
+const ALLOWED_INTERACTION_TYPES: ReadonlySet<string> = new Set<MissionInteractionType>([
+  'CONVERSATION',
+  'EVIDENCE_SUBMISSION',
+  'AMBIGUOUS',
+])
+
 /**
- * Validates untrusted LLM output at runtime against the mission rubric.
+ * Validates untrusted LLM output at runtime against the mission rubric and interaction contract.
  * Throws EvaluationValidationError if the response is malformed, ensuring
- * invalid model output can never accidentally produce a PASS verdict.
+ * invalid model output can never accidentally produce a PASS verdict or mutate state.
  */
 export function validateEvidenceEvaluation(
   raw: unknown,
-  rubric: Rubric,
+  rubric?: Rubric,
 ): StructuredEvidenceEvaluation {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new EvaluationValidationError('LLM output must be a non-null object')
@@ -40,14 +47,49 @@ export function validateEvidenceEvaluation(
 
   const candidate = raw as Record<string, unknown>
 
-  // 1. Validate coachingFeedback
-  if (typeof candidate.coachingFeedback !== 'string' || !candidate.coachingFeedback.trim()) {
-    throw new EvaluationValidationError('coachingFeedback must be a non-empty string')
+  // 1. Validate / default interactionType
+  let interactionType: MissionInteractionType = 'EVIDENCE_SUBMISSION'
+  if (candidate.interactionType !== undefined) {
+    if (
+      typeof candidate.interactionType !== 'string' ||
+      !ALLOWED_INTERACTION_TYPES.has(candidate.interactionType as MissionInteractionType)
+    ) {
+      throw new EvaluationValidationError(
+        `interactionType '${candidate.interactionType}' is invalid (allowed: CONVERSATION, EVIDENCE_SUBMISSION, AMBIGUOUS)`,
+      )
+    }
+    interactionType = candidate.interactionType as MissionInteractionType
   }
 
-  // 2. Validate criteria array
+  // 2. Validate message / coachingFeedback
+  const messageCandidate =
+    typeof candidate.message === 'string' && candidate.message.trim()
+      ? candidate.message.trim()
+      : typeof candidate.coachingFeedback === 'string' && candidate.coachingFeedback.trim()
+        ? candidate.coachingFeedback.trim()
+        : ''
+
+  if (!messageCandidate) {
+    throw new EvaluationValidationError('message or coachingFeedback must be a non-empty string')
+  }
+
+  // 3. For CONVERSATION and AMBIGUOUS, criteria array is not required
+  if (interactionType === 'CONVERSATION' || interactionType === 'AMBIGUOUS') {
+    return {
+      interactionType,
+      message: messageCandidate,
+      coachingFeedback: messageCandidate,
+      criteria: [],
+    }
+  }
+
+  // 4. For EVIDENCE_SUBMISSION, criteria array is strictly required and validated
   if (!Array.isArray(candidate.criteria) || candidate.criteria.length === 0) {
-    throw new EvaluationValidationError('criteria must be a non-empty array')
+    throw new EvaluationValidationError('criteria must be a non-empty array for EVIDENCE_SUBMISSION')
+  }
+
+  if (!rubric) {
+    throw new EvaluationValidationError('a structured rubric is required for EVIDENCE_SUBMISSION')
   }
 
   const validCriterionIds = new Set(rubric.criteria.map((c) => c.id))
@@ -96,7 +138,7 @@ export function validateEvidenceEvaluation(
     })
   }
 
-  // 3. Optional metadata validation
+  // 5. Optional metadata validation
   let validatedConfidence: number | undefined
   if (candidate.confidence !== undefined) {
     if (typeof candidate.confidence !== 'number' || candidate.confidence < 0 || candidate.confidence > 1) {
@@ -116,8 +158,10 @@ export function validateEvidenceEvaluation(
   }
 
   return {
+    interactionType: 'EVIDENCE_SUBMISSION',
+    message: messageCandidate,
+    coachingFeedback: messageCandidate,
     criteria: validatedCriteria,
-    coachingFeedback: candidate.coachingFeedback.trim(),
     confidence: validatedConfidence,
     recommendation: validatedRecommendation,
   }

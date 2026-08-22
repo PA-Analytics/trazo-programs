@@ -1,76 +1,58 @@
-import { GoogleGenAI } from '@google/genai'
 import type {
   ImplementationArtifact,
   Mission,
+  MissionInteractionTurn,
+  ProgressState,
+  Rubric,
   StructuredEvidenceEvaluation,
 } from '../../domain/course.ts'
 import { COMPANION_SYSTEM_INSTRUCTION, buildCompanionUserPrompt } from './prompts.ts'
 import { validateEvidenceEvaluation } from './schema.ts'
 import type { IEvidenceInterpreter } from './types.ts'
+import { createCanonicalGeminiRuntime, type CanonicalGeminiRuntime } from '../ai/runtime.ts'
 
-export interface GeminiEvidenceInterpreterOptions {
-  apiKey?: string
-  model?: string
-  project?: string
-  location?: string
-}
-
-/**
- * Google Gen AI SDK Evidence Interpreter.
- * Evaluates untrusted learner evidence using the Google Gen AI SDK (@google/genai)
- * with a Gemini 3.5+ model (e.g. gemini-3.7-flash) on Vertex AI or Google AI.
- */
 export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
-  private ai: GoogleGenAI
-  private model: string
+  private readonly runtime: CanonicalGeminiRuntime
 
-  constructor(optionsOrApiKey?: string | GeminiEvidenceInterpreterOptions, model?: string) {
-    let opts: GeminiEvidenceInterpreterOptions = {}
-    if (typeof optionsOrApiKey === 'string') {
-      opts = { apiKey: optionsOrApiKey, model }
-    } else if (optionsOrApiKey) {
-      opts = optionsOrApiKey
-    }
-
-    this.model = (opts.model || model || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
-
-    const rawKey = opts.apiKey || process.env.GEMINI_API_KEY
-    const explicitProject = opts.project || process.env.GOOGLE_CLOUD_PROJECT
-    const location = opts.location || process.env.GOOGLE_CLOUD_LOCATION || 'global'
-
-    if (opts.apiKey) {
-      this.ai = new GoogleGenAI({ apiKey: opts.apiKey.trim() })
-    } else if (rawKey && !explicitProject) {
-      this.ai = new GoogleGenAI({ apiKey: rawKey.trim() })
-    } else {
-      const project = explicitProject || 'trazo-agentic-2026'
-      this.ai = new GoogleGenAI({
-        vertexai: true,
-        project,
-        location,
-      })
-    }
+  constructor(runtime: CanonicalGeminiRuntime = createCanonicalGeminiRuntime()) {
+    this.runtime = runtime
   }
 
   async interpret(params: {
     mission: Mission
     evidence: string
     consumedArtifacts?: Record<string, ImplementationArtifact>
+    currentProgress?: ProgressState
+    recentInteraction?: MissionInteractionTurn[]
+    learnerHelpPreference?: 'DIRECT' | 'QUESTIONS' | 'EXAMPLE' | 'ADAPTIVE'
+    rubric?: Rubric
   }): Promise<StructuredEvidenceEvaluation> {
-    const { mission, evidence, consumedArtifacts } = params
-    if (!mission.rubric) {
-      throw new Error(`Mission '${mission.id}' has no configured rubric`)
-    }
-
-    const userPrompt = buildCompanionUserPrompt(mission, evidence, consumedArtifacts)
+    const {
+      mission,
+      evidence,
+      consumedArtifacts,
+      currentProgress,
+      recentInteraction,
+      learnerHelpPreference,
+      rubric,
+    } = params
+    const userPrompt = buildCompanionUserPrompt(
+      mission,
+      evidence,
+      consumedArtifacts,
+      currentProgress,
+      recentInteraction,
+      learnerHelpPreference,
+      rubric,
+    )
 
     let lastError: unknown
     const maxRetries = 4
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await this.ai.models.generateContent({
-          model: this.model,
+        const response = await this.runtime.generateContent({
+          model: this.runtime.model,
           contents: userPrompt,
           config: {
             systemInstruction: COMPANION_SYSTEM_INSTRUCTION,
@@ -91,7 +73,7 @@ export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
           throw new Error(`Model output could not be parsed as JSON: ${message}`)
         }
 
-        return validateEvidenceEvaluation(parsed, mission.rubric)
+        return validateEvidenceEvaluation(parsed, rubric || mission.rubric)
       } catch (err: unknown) {
         lastError = err
         const errStatus =

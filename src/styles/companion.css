@@ -1,0 +1,592 @@
+/* ==========================================================================
+   TRAZO COMPANION — Physical Inhabitation, 2.5D Depth & Anchored Panel
+   ========================================================================== */
+
+.trazo-companion-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 48px;
+  height: 48px;
+  margin-left: -24px;
+  margin-top: -24px;
+  pointer-events: auto;
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+/* Sombra Proyectada Desacoplada en Suelo 2.5D */
+.trazo-companion-shadow {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 32px;
+  height: 10px;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(20, 26, 22, 0.45) 0%,
+    rgba(20, 26, 22, 0) 72%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  transition: transform 80ms linear, opacity 80ms linear;
+}
+
+/* Botón interactivo accesible de la mascota */
+.trazo-companion-body-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 150ms var(--trazo-ease-standard);
+  touch-action: manipulation;
+}
+
+.trazo-companion-body-btn:focus-visible {
+  outline: 2px solid var(--trazo-focus);
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+
+.trazo-companion-body-btn:hover {
+  transform: scale(1.06);
+}
+
+.trazo-companion-body-btn.trazo-squish {
+  transform: scale(0.92, 0.85);
+  transition: transform 90ms ease-out;
+}
+
+/* Anillo exterior para Modo TRAZO / Verified */
+.trazo-companion-halo {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition: border-color 300ms ease, box-shadow 300ms ease;
+}
+
+.trazo-companion-root[data-state="verified"] .trazo-companion-halo {
+  border-color: var(--trazo-action);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--trazo-action) 40%, transparent);
+  animation: trazo-halo-pulse 2s ease-in-out infinite;
+}
+
+@keyframes trazo-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* Figura Vectorial de Cartógrafo 2.5D */
+.trazo-companion-figure {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Antena orientable con gema sensora */
+.trazo-figure-antenna {
+  position: absolute;
+  top: -6px;
+  width: 2px;
+  height: 8px;
+  background: var(--trazo-ink);
+  transform-origin: bottom center;
+  transition: transform 200ms var(--trazo-ease-standard);
+}
+
+.trazo-antenna-tip {
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 6px;
+  height: 6px;
+  background: var(--trazo-ink);
+  border-radius: 50%;
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+
+.trazo-companion-root[data-state="attention"] .trazo-figure-antenna {
+  transform: rotate(15deg);
+}
+
+.trazo-companion-root[data-state="attention"] .trazo-antenna-tip,
+.trazo-companion-root[data-state="thinking"] .trazo-antenna-tip,
+.trazo-companion-root[data-state="verified"] .trazo-antenna-tip {
+  background: var(--trazo-action);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--trazo-action) 50%, transparent);
+}
+
+/* Torso mineral estructurado */
+.trazo-figure-torso {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  background: var(--trazo-paper);
+  border: 1.5px solid var(--trazo-ink);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 3px 8px rgba(20, 26, 22, 0.12);
+  transition: transform 150ms ease, background-color 250ms ease, border-color 250ms ease;
+}
+
+.trazo-companion-root[data-state="verified"] .trazo-figure-torso {
+  background: color-mix(in srgb, var(--trazo-action) 12%, var(--trazo-paper));
+  border-color: var(--trazo-action);
+  animation: trazo-verified-triumph 2.8s var(--trazo-ease-standard);
+}
+
+@keyframes trazo-verified-triumph {
+  0% { transform: translateY(0); }
+  20% { transform: translateY(-8px) scale(1.05); }
+  35% { transform: translateY(0) scale(0.98); }
+  48% { transform: translateY(-3px) scale(1.02); }
+  60% { transform: translateY(0); }
+  100% { transform: translateY(0); }
+}
+
+/* Ojos con tracking direccional */
+.trazo-figure-eyes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.trazo-eye {
+  width: 3.5px;
+  height: 5px;
+  background: var(--trazo-ink);
+  border-radius: 2px;
+  transition: transform 120ms ease;
+}
+
+/* Dial central / Brújula de cobalto */
+.trazo-figure-compass {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--trazo-muted);
+  border-radius: 50%;
+  position: relative;
+  transition: border-color 200ms ease;
+}
+
+.trazo-figure-compass::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  width: 2px;
+  height: 4px;
+  background: var(--trazo-action);
+  border-radius: 1px;
+  transform-origin: bottom center;
+  transition: transform 200ms ease;
+}
+
+.trazo-companion-root[data-state="verified"] .trazo-figure-compass {
+  border-color: var(--trazo-action);
+}
+
+/* Animaciones de Respiración e Inferencia */
+.trazo-companion-root[data-state="idle"] .trazo-figure-torso {
+  animation: trazo-idle-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes trazo-idle-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+.trazo-companion-root[data-state="thinking"] .trazo-figure-antenna {
+  animation: trazo-thinking-antenna 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes trazo-thinking-antenna {
+  0% { transform: rotate(-12deg); }
+  100% { transform: rotate(12deg); }
+}
+
+.trazo-companion-root[data-state="thinking"] .trazo-figure-compass::after {
+  animation: trazo-compass-search 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes trazo-compass-search {
+  0% { transform: rotate(-18deg); }
+  100% { transform: rotate(18deg); }
+}
+
+/* Orientación de 8 Cuadrantes de la Brújula */
+.trazo-companion-root[data-direction="N"] .trazo-eye { transform: translateY(-1.5px); }
+.trazo-companion-root[data-direction="N"] .trazo-figure-compass::after { transform: rotate(0deg); }
+
+.trazo-companion-root[data-direction="NE"] .trazo-eye { transform: translate(1px, -1px); }
+.trazo-companion-root[data-direction="NE"] .trazo-figure-torso { transform: rotate(3deg); }
+.trazo-companion-root[data-direction="NE"] .trazo-figure-compass::after { transform: rotate(45deg); }
+
+.trazo-companion-root[data-direction="E"] .trazo-eye { transform: translateX(1.5px); }
+.trazo-companion-root[data-direction="E"] .trazo-figure-compass::after { transform: rotate(90deg); }
+
+.trazo-companion-root[data-direction="SE"] .trazo-eye { transform: translate(1px, 1px); }
+.trazo-companion-root[data-direction="SE"] .trazo-figure-torso { transform: rotate(3deg); }
+.trazo-companion-root[data-direction="SE"] .trazo-figure-compass::after { transform: rotate(135deg); }
+
+.trazo-companion-root[data-direction="S"] .trazo-eye { transform: translateY(1.5px); }
+.trazo-companion-root[data-direction="S"] .trazo-figure-compass::after { transform: rotate(180deg); }
+
+.trazo-companion-root[data-direction="SW"] .trazo-eye { transform: translate(-1px, 1px); }
+.trazo-companion-root[data-direction="SW"] .trazo-figure-torso { transform: rotate(-3deg); }
+.trazo-companion-root[data-direction="SW"] .trazo-figure-compass::after { transform: rotate(225deg); }
+
+.trazo-companion-root[data-direction="W"] .trazo-eye { transform: translateX(-1.5px); }
+.trazo-companion-root[data-direction="W"] .trazo-figure-compass::after { transform: rotate(270deg); }
+
+.trazo-companion-root[data-direction="NW"] .trazo-eye { transform: translate(-1px, -1px); }
+.trazo-companion-root[data-direction="NW"] .trazo-figure-torso { transform: rotate(-3deg); }
+.trazo-companion-root[data-direction="NW"] .trazo-figure-compass::after { transform: rotate(315deg); }
+
+/* Cue de Atención Periférica */
+.trazo-attention-pill {
+  position: absolute;
+  top: -24px;
+  white-space: nowrap;
+  background: var(--trazo-ink);
+  color: var(--trazo-paper);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  animation: trazo-attention-pop 250ms var(--trazo-ease-standard);
+  z-index: 10;
+}
+
+@keyframes trazo-attention-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sello de Verificación Modo TRAZO ("yep. eso sí") */
+.trazo-verified-badge {
+  position: absolute;
+  top: -26px;
+  white-space: nowrap;
+  background: var(--trazo-action);
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--trazo-action) 40%, transparent);
+  animation: trazo-verified-pop 280ms var(--trazo-ease-standard);
+  z-index: 12;
+}
+
+@keyframes trazo-verified-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.85); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Micro-reacción de toque rápido repetido */
+.trazo-reaction-bubble {
+  position: absolute;
+  top: -30px;
+  white-space: nowrap;
+  background: var(--trazo-paper);
+  color: var(--trazo-ink);
+  border: 1px solid var(--trazo-ink);
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: trazo-reaction-appear 180ms ease-out;
+  z-index: 15;
+}
+
+@keyframes trazo-reaction-appear {
+  from { opacity: 0; transform: translateY(4px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Panel Anclado Compacto de Conversación */
+.trazo-anchored-panel {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  max-width: min(340px, 85vw);
+  background: var(--trazo-surface, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--trazo-ink) 18%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(20, 26, 22, 0.16);
+  z-index: 60;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: trazo-panel-appear 200ms ease-out;
+  pointer-events: auto;
+}
+
+.trazo-anchored-panel[data-placement="top"] {
+  top: auto;
+  bottom: 52px;
+}
+
+.trazo-anchored-panel[data-align="left"] {
+  left: 0;
+  transform: none;
+}
+
+.trazo-anchored-panel[data-align="right"] {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+@keyframes trazo-panel-appear {
+  from { opacity: 0; transform: translate(-50%, -6px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.trazo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--trazo-bg, #f7f7f4);
+  border-bottom: 1px solid color-mix(in srgb, var(--trazo-ink) 10%, transparent);
+}
+
+.trazo-panel-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trazo-panel-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--trazo-muted);
+}
+
+.trazo-panel-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--trazo-ink);
+  font-family: var(--trazo-font-display, Anton, sans-serif);
+  letter-spacing: 0.02em;
+}
+
+.trazo-panel-close-btn {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--trazo-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.trazo-panel-close-btn:hover {
+  background: color-mix(in srgb, var(--trazo-ink) 8%, transparent);
+  color: var(--trazo-ink);
+}
+
+.trazo-panel-close-btn:focus-visible {
+  outline: 2px solid var(--trazo-focus);
+}
+
+.trazo-panel-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.trazo-panel-turns {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trazo-panel-turns li {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.trazo-panel-turns li[data-role="companion"] {
+  background: color-mix(in srgb, var(--trazo-action) 8%, transparent);
+  border-left: 2px solid var(--trazo-action);
+}
+
+.trazo-panel-turns li[data-role="learner"] {
+  background: color-mix(in srgb, var(--trazo-ink) 5%, transparent);
+}
+
+.trazo-turn-speaker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--trazo-muted);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.trazo-panel-status {
+  font-size: 0.8rem;
+  color: var(--trazo-muted);
+  margin: 4px 0;
+  font-style: italic;
+}
+
+.trazo-panel-error {
+  padding: 8px 10px;
+  background: color-mix(in srgb, #d9534f 8%, transparent);
+  border-left: 2px solid #d9534f;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--trazo-ink);
+}
+
+.trazo-panel-retry {
+  margin-top: 6px;
+  background: none;
+  border: 1px solid var(--trazo-ink);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.trazo-clarification-prompt {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--trazo-ink);
+}
+
+.trazo-clarification-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.trazo-clarification-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--trazo-ink) 20%, transparent);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: var(--trazo-paper);
+  color: var(--trazo-ink);
+}
+
+.trazo-clarification-input:focus-visible {
+  outline: 2px solid var(--trazo-focus);
+}
+
+.trazo-clarification-submit {
+  padding: 6px 12px;
+  background: var(--trazo-ink);
+  color: var(--trazo-paper);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trazo-clarification-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.trazo-recommendation-info strong {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--trazo-ink);
+  margin-bottom: 3px;
+}
+
+.trazo-recommendation-info p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--trazo-muted);
+  line-height: 1.35;
+}
+
+.trazo-start-mission-btn {
+  width: 100%;
+  padding: 8px;
+  background: var(--trazo-action);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 150ms ease;
+}
+
+.trazo-start-mission-btn:hover {
+  opacity: 0.92;
+}
+
+.trazo-start-mission-btn:focus-visible {
+  outline: 2px solid var(--trazo-focus);
+}
+
+/* Respeto Estricto a Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .trazo-companion-root,
+  .trazo-companion-figure,
+  .trazo-figure-antenna,
+  .trazo-figure-torso,
+  .trazo-figure-compass,
+  .trazo-figure-compass::after,
+  .trazo-eye,
+  .trazo-attention-pill,
+  .trazo-verified-badge,
+  .trazo-reaction-bubble,
+  .trazo-anchored-panel,
+  .trazo-companion-halo {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

@@ -15,13 +15,14 @@ export class EvidenceEvaluatorService {
   }
 
   /**
-   * Evaluates learner text evidence against the mission rubric.
+   * Evaluates learner text/message against the mission interaction contract.
    *
    * Flow:
    * 1. Validates mission and rubric existence.
    * 2. Calls probabilistic interpreter (Google Gen AI SDK / mock).
    * 3. Performs strict runtime schema validation (validateEvidenceEvaluation).
-   * 4. Evaluates deterministic policy (applyEvaluationPolicy).
+   * 4. If interactionType === 'EVIDENCE_SUBMISSION': Evaluates deterministic policy (applyEvaluationPolicy).
+   *    If interactionType === 'CONVERSATION' or 'AMBIGUOUS': Returns safe non-PASS verdict ('CLARIFY').
    * 5. Pure interpretation and policy derivation only:
    *    - ZERO state mutation.
    *    - ZERO database updates.
@@ -44,22 +45,26 @@ export class EvidenceEvaluatorService {
       throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
     }
 
-    if (!mission.rubric) {
-      throw new Error(`Mission '${missionId}' has no structured rubric configured for evaluation`)
-    }
-
     // Call probabilistic interpreter
+    const evaluationRubric = dto.evaluationRubric || mission.rubric
     const rawEvaluation = await this.interpreter.interpret({
       mission,
       evidence,
       consumedArtifacts: dto.consumedArtifacts,
+      currentProgress: dto.currentProgress,
+      recentInteraction: dto.recentInteraction,
+      learnerHelpPreference: dto.learnerHelpPreference,
+      rubric: evaluationRubric,
     })
 
     // Runtime Schema Validation Gatekeeper
-    const validatedEvaluation = validateEvidenceEvaluation(rawEvaluation, mission.rubric)
+    const validatedEvaluation = validateEvidenceEvaluation(rawEvaluation, evaluationRubric)
 
-    // Apply existing deterministic policy gatekeeper
-    const policyVerdict = applyEvaluationPolicy(validatedEvaluation, mission.rubric)
+    // Deterministic Policy Gatekeeper
+    const isSubmission = validatedEvaluation.interactionType === 'EVIDENCE_SUBMISSION'
+    const policyVerdict = isSubmission && evaluationRubric
+      ? applyEvaluationPolicy(validatedEvaluation, evaluationRubric)
+      : 'CLARIFY'
 
     return {
       evaluation: validatedEvaluation,

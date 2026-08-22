@@ -46,7 +46,24 @@ export type AgentRecommendation = 'PASS' | 'CLARIFY' | 'REWORK' | 'HUMAN_REVIEW'
 
 export type PolicyVerdict = 'PASS' | 'CLARIFY' | 'REWORK' | 'HUMAN_REVIEW'
 
+export type MissionInteractionType =
+  | 'CONVERSATION'
+  | 'EVIDENCE_SUBMISSION'
+  | 'AMBIGUOUS'
+
+export interface MissionInteractionTurn {
+  role: 'learner' | 'companion'
+  content: string
+}
+
+export interface NextActionTurn {
+  role: 'learner' | 'companion'
+  content: string
+}
+
 export interface StructuredEvidenceEvaluation {
+  interactionType?: MissionInteractionType
+  message?: string
   criteria: CriterionResult[]
   coachingFeedback: string
   confidence?: number
@@ -72,17 +89,27 @@ export type NextActionProposal =
 export type EvaluationStatus =
   | 'idle'
   | 'evaluating'
+  | 'conversation'
+  | 'ambiguous'
   | 'pass'
   | 'clarify'
   | 'rework'
   | 'human_review'
-  | 'error'
+  | 'system_error'
+
+export interface SystemEvaluationError {
+  kind: 'SYSTEM_ERROR'
+  userMessage: string
+  debugCode?: string
+}
 
 export interface MissionEvaluationState {
   status: EvaluationStatus
+  interactionType?: MissionInteractionType
+  message?: string
   evaluation?: StructuredEvidenceEvaluation
   policyVerdict?: PolicyVerdict
-  errorMessage?: string
+  systemError?: SystemEvaluationError
 }
 
 export interface ImplementationArtifact<T = unknown> {
@@ -111,11 +138,50 @@ export interface NarrativeStructureArtifactValue {
 
 export interface ImplementationState {
   id: string
+  userId?: string
+  coachId?: string
   courseId: string
   courseVersion?: string
   completedMissionIds: string[]
   activeMissionId?: string
   artifacts?: Record<string, ImplementationArtifact>
+  learnerSetup?: LearnerSetup
+  createdAt: string
+  updatedAt: string
+}
+
+export type AvailableTime = '15_30_MIN' | '30_60_MIN' | '1_2_HOURS' | 'VARIES'
+export type HelpPreference = 'DIRECT' | 'QUESTIONS' | 'EXAMPLE' | 'ADAPTIVE'
+
+export interface LearnerSetup {
+  goal: string
+  availableTime: AvailableTime
+  helpPreference: HelpPreference
+  updatedAt: string
+}
+
+export type CalibrationExampleSource = 'creator' | 'generated'
+export type CalibrationCaseQuality = 'clear_pass' | 'clear_rework' | 'borderline'
+export type CalibrationVerdict = 'PASS' | 'REWORK' | 'CLARIFY'
+
+export interface CalibrationExample {
+  id: string
+  source: CalibrationExampleSource
+  submission: string
+  caseQuality?: CalibrationCaseQuality
+  verdict?: CalibrationVerdict
+  reason?: string
+  judgedAt?: string
+}
+
+export interface CreatorCalibration {
+  missionId: string
+  userId?: string
+  initialStandard: string
+  examples: CalibrationExample[]
+  proposedRubric?: Rubric
+  status: 'draft' | 'proposed' | 'confirmed'
+  confirmedAt?: string
   createdAt: string
   updatedAt: string
 }

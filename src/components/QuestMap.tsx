@@ -5,28 +5,35 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ReactFlow,
   ReactFlowProvider,
   type Node,
   type NodeTypes,
   type ReactFlowInstance,
+  getBezierPath,
+  Position,
 } from '@xyflow/react'
 import type {
   Chapter,
+  MapPosition,
   Mission,
   MissionEvaluationState,
   MissionProgress,
 } from '../domain/course'
 import { deriveEdgeProgress } from '../domain/progression'
+import { CompanionAvatar, type CompanionHandle } from './CompanionAvatar'
 import { JunctionNode } from './JunctionNode'
 import { MapControls } from './MapControls'
-import { QuestEdge, type QuestFlowEdge } from './QuestEdge'
+import { QuestEdge, smoothSplineThroughVia, type QuestFlowEdge } from './QuestEdge'
 import { QuestNode, type QuestFlowNode } from './QuestNode'
 import { TerritoryNode, type TerritoryFlowNode } from './TerritoryNode'
 
 interface QuestMapProps {
+  userId: string
   chapter: Chapter
   progress: MissionProgress
   evaluationStateByMissionId: Record<string, MissionEvaluationState>
@@ -35,6 +42,13 @@ interface QuestMapProps {
   lockedReasons: Record<string, string | undefined>
   recenterRequest: number
   onMissionSelect: (missionId: string) => void
+  implementationId: string
+  availableMissions: Mission[]
+  onStartMission: (missionId: string) => Promise<void>
+  onRecommendationChange: (missionId: string | null) => void
+  activeMissionId?: string
+  isEvaluating?: boolean
+  isVerifiedAction?: boolean
 }
 
 interface JunctionNodeData extends Record<string, unknown> {
@@ -63,7 +77,41 @@ function getNodeDimension(mission: Mission) {
   return nodeDimensions[mission.nodeType]
 }
 
+function getCompanionRestPosition(mission: Mission): MapPosition {
+  const dim = getNodeDimension(mission)
+  return {
+    x: mission.position.x + dim + 16,
+    y: mission.position.y + dim / 2,
+  }
+}
+
+function ViewportOverlay({
+  containerRef,
+  children,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>
+  children: ReactNode
+}) {
+  const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const el =
+      (containerRef.current?.querySelector('.react-flow__viewport') as HTMLElement | null) ||
+      (document.querySelector('.react-flow__viewport') as HTMLElement | null)
+    if (el) {
+      setViewportEl(el)
+    }
+  }, [containerRef])
+
+  if (!viewportEl) {
+    return <>{children}</>
+  }
+
+  return createPortal(children, viewportEl)
+}
+
 function QuestMapCanvas({
+  userId,
   chapter,
   progress,
   evaluationStateByMissionId,
@@ -72,15 +120,36 @@ function QuestMapCanvas({
   lockedReasons,
   recenterRequest,
   onMissionSelect,
+  implementationId,
+  availableMissions,
+  onStartMission,
+  onRecommendationChange,
+  activeMissionId,
+  isEvaluating,
+  isVerifiedAction,
 }: QuestMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
+  const companionRef = useRef<CompanionHandle>(null)
+  const previousMissionIdRef = useRef<string | null>(selectedMissionId || activeMissionId || null)
   const [instance, setInstance] = useState<ReactFlowInstance<MapNode, QuestFlowEdge> | null>(null)
   const [hoveredMissionId, setHoveredMissionId] = useState<string | null>(null)
   const [cameraZoom, setCameraZoom] = useState(1)
 
-  const cameraDuration = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ? 0
-    : 150
+  const activeOrInitialMission =
+    chapter.missions.find((m) => m.id === (selectedMissionId || activeMissionId)) ||
+    chapter.missions[0]
+
+  const companionInitialPos = useMemo(() => {
+    if (!activeOrInitialMission) return { x: 110, y: 380 }
+    return getCompanionRestPosition(activeOrInitialMission)
+  }, [activeOrInitialMission])
+
+  const cameraDuration =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 0
+      : 150
 
   const fitMap = useCallback(() => {
     if (!instance) return
@@ -200,6 +269,67 @@ function QuestMapCanvas({
   )
 
   useEffect(() => {
+    if (!selectedMissionId || selectedMissionId === previousMissionIdRef.current) return
+    const prevId = previousMissionIdRef.current
+    previousMissionIdRef.current = selectedMissionId
+
+    const targetMission = chapter.missions.find((item) => item.id === selectedMissionId)
+    if (!targetMission) return
+
+    const targetRestPos = getCompanionRestPosition(targetMission)
+
+    if (prevId) {
+      const edge = chapter.edges.find(
+        (item) =>
+          (item.source === prevId && item.target === selectedMissionId) ||
+          (item.target === prevId && item.source === selectedMissionId),
+      )
+      const prevMission = chapter.missions.find((item) => item.id === prevId)
+      if (edge && prevMission) {
+        const prevDim = getNodeDimension(prevMission)
+        const targetDim = getNodeDimension(targetMission)
+        const isForward = edge.source === prevId
+        const sourceX = isForward
+          ? prevMission.position.x + prevDim
+          : targetMission.position.x + targetDim
+        const sourceY = isForward
+          ? prevMission.position.y + prevDim / 2
+          : targetMission.position.y + targetDim / 2
+        const targetX = isForward
+          ? targetMission.position.x
+          : prevMission.position.x
+        const targetY = isForward
+          ? targetMission.position.y + targetDim / 2
+          : prevMission.position.y + prevDim / 2
+
+        const edgePath = edge.via
+          ? smoothSplineThroughVia(sourceX, sourceY, targetX, targetY, edge.via)
+          : getBezierPath({
+              sourceX,
+              sourceY,
+              targetX,
+              targetY,
+              sourcePosition: Position.Right,
+              targetPosition: Position.Left,
+              curvature: 0.34,
+            })[0]
+
+        companionRef.current?.moveToNode(edgePath, selectedMissionId)
+        return
+      }
+
+      if (prevMission) {
+        const prevRestPos = getCompanionRestPosition(prevMission)
+        const fallbackPath = `M ${prevRestPos.x} ${prevRestPos.y} L ${targetRestPos.x} ${targetRestPos.y}`
+        companionRef.current?.moveToNode(fallbackPath, selectedMissionId)
+        return
+      }
+    }
+
+    companionRef.current?.teleportTo(targetRestPos)
+  }, [chapter.edges, chapter.missions, selectedMissionId])
+
+  useEffect(() => {
     if (!instance || recenterRequest === 0) return
     fitMap()
   }, [fitMap, instance, recenterRequest])
@@ -213,7 +343,10 @@ function QuestMapCanvas({
     const panelWidth = Math.min(460, Math.max(360, mapWidth * 0.32))
     const zoom = instance.getZoom()
     const size = getNodeDimension(mission)
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const centerX = mission.position.x + size / 2 + panelWidth / (2 * zoom)
     const centerY = mission.position.y + size / 2
 
@@ -286,7 +419,23 @@ function QuestMapCanvas({
         preventScrolling
         aria-label="Mapa visual de misiones del Chapter 1"
         proOptions={{ hideAttribution: true }}
-      />
+      >
+        <ViewportOverlay containerRef={mapContainerRef}>
+          <CompanionAvatar
+            ref={companionRef}
+            initialPosition={companionInitialPos}
+            userId={userId}
+            implementationId={implementationId}
+            activeMissionId={activeMissionId}
+            availableMissions={availableMissions}
+            onStartMission={onStartMission}
+            onSelectMission={onMissionSelect}
+            onRecommendationChange={onRecommendationChange}
+            isEvaluating={isEvaluating}
+            isVerifiedAction={isVerifiedAction}
+          />
+        </ViewportOverlay>
+      </ReactFlow>
       <MapControls
         zoom={cameraZoom}
         disabled={!instance}

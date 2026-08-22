@@ -8,15 +8,15 @@ import { ImplementationService } from '../src/server/service.ts'
 import { createRequestListener } from '../src/server/app.ts'
 import { course } from '../src/data/course.ts'
 import type { Rubric, StructuredEvidenceEvaluation, ImplementationState } from '../src/domain/course.ts'
-import type { IEvaluationInterpreter } from '../src/server/evaluator/types.ts'
+import type { IEvidenceInterpreter } from '../src/server/evaluator/types.ts'
 import { EvidenceEvaluatorService } from '../src/server/evaluator/evaluatorService.ts'
 
-class MockInterpreter implements IEvaluationInterpreter {
+class MockInterpreter implements IEvidenceInterpreter {
   public responseGenerator?: (missionId: string, evidence: string) => StructuredEvidenceEvaluation
 
-  async evaluateEvidence(missionId: string, evidence: string): Promise<StructuredEvidenceEvaluation> {
+  async interpret({ mission, evidence }: Parameters<IEvidenceInterpreter['interpret']>[0]): Promise<StructuredEvidenceEvaluation> {
     if (this.responseGenerator) {
-      return this.responseGenerator(missionId, evidence)
+      return this.responseGenerator(mission.id, evidence)
     }
     throw new Error('No mock response generator configured')
   }
@@ -141,7 +141,7 @@ test('HARDENING 4: submitEvidence rejects whitespace-only evidence', async () =>
   )
 })
 
-test('HARDENING 5: Canonical artifact is immutable against re-submissions of completed missions', async () => {
+test('HARDENING 5: Canonical artifact is immutable against evidence re-submissions of completed missions', async () => {
   const repository = new MemoryImplementationRepository()
   const service = new ImplementationService(repository)
   const interpreter = new MockInterpreter()
@@ -166,7 +166,18 @@ test('HARDENING 5: Canonical artifact is immutable against re-submissions of com
   }
   await repository.save(state)
 
-  // Submitting a new evidence for already completed N01 must return existing state without calling evaluator or mutating
+  interpreter.responseGenerator = () => ({
+    interactionType: 'EVIDENCE_SUBMISSION',
+    message: 'Esta es una nueva evidencia.',
+    coachingFeedback: 'Esta es una nueva evidencia.',
+    criteria: [
+      { criterionId: 'c1_concrete_idea', status: 'PASS', rationale: 'Idea concreta.' },
+      { criterionId: 'c2_target_audience', status: 'PASS', rationale: 'Audiencia clara.' },
+      { criterionId: 'c3_no_filler', status: 'PASS', rationale: 'Una frase directa.' },
+    ],
+  })
+
+  // A completed mission may receive a new turn, but it must retain its canonical artifact.
   const response = await service.submitEvidence(
     state.id,
     { missionId: 'N01', evidence: 'New attempt to alter premise' },

@@ -1,13 +1,18 @@
 import * as http from 'node:http'
 import { createRequestListener } from './app.ts'
-import { createImplementationRepository } from './repository.ts'
+import { createCalibrationRepository, createImplementationRepository, createProfileRepository } from './repository.ts'
+import { CalibrationService } from './calibrationService.ts'
+import { IdentityService } from './identityService.ts'
 import { ImplementationService } from './service.ts'
 
 const port = Number(process.env.PORT || 3001)
 const host = '0.0.0.0'
 const repository = createImplementationRepository()
-const service = new ImplementationService(repository)
-const requestListener = createRequestListener(service)
+const calibrationRepository = createCalibrationRepository()
+const service = new ImplementationService(repository, calibrationRepository)
+const calibrationService = new CalibrationService(calibrationRepository)
+const identityService = new IdentityService(createProfileRepository(), service)
+const requestListener = createRequestListener(service, { calibrationService, identityService })
 
 const server = http.createServer(requestListener)
 

@@ -4,7 +4,7 @@ import { GeminiEvidenceInterpreter } from '../src/server/evaluator/geminiInterpr
 import { EvidenceEvaluatorService } from '../src/server/evaluator/evaluatorService.ts'
 import { n01Fixtures } from './fixtures/n01Fixtures.ts'
 
-const runLive = process.env.RUN_LIVE_GEMINI === 'true' && Boolean(process.env.GEMINI_API_KEY)
+const runLive = process.env.RUN_LIVE_GEMINI === 'true' && (Boolean(process.env.GEMINI_API_KEY) || Boolean(process.env.GOOGLE_CLOUD_PROJECT))
 
 test('Live Gemini Diagnostic Evaluation on N01 Fixtures', { skip: !runLive }, async () => {
   console.log('\n=== RUNNING LIVE GEMINI DIAGNOSTIC TEST (N01) ===\n')

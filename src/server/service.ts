@@ -1,21 +1,43 @@
 import { course } from '../data/course.ts'
+import { adaptCompanionGuidance } from '../domain/learner.ts'
 import type { ImplementationArtifact, ImplementationState } from '../domain/course.ts'
 import { deriveMissionProgress } from '../domain/progression.ts'
 import type { EvidenceEvaluatorService } from './evaluator/evaluatorService.ts'
 import type {
   CreateImplementationDTO,
   DevCompleteMissionDTO,
+  ICalibrationRepository,
   IImplementationRepository,
+  LearnerSetupDTO,
   StartMissionDTO,
   SubmissionResponseDTO,
   SubmitEvidenceDTO,
 } from './types.ts'
 
+function normalizeRecentInteraction(value: unknown) {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter(
+      (turn): turn is { role: 'learner' | 'companion'; content: string } =>
+        typeof turn === 'object' &&
+        turn !== null &&
+        ((turn as { role?: unknown }).role === 'learner' ||
+          (turn as { role?: unknown }).role === 'companion') &&
+        typeof (turn as { content?: unknown }).content === 'string',
+    )
+    .map((turn) => ({ role: turn.role, content: turn.content.trim().slice(0, 1200) }))
+    .filter((turn) => turn.content.length > 0)
+    .slice(-4)
+}
+
 export class ImplementationService {
   private repository: IImplementationRepository
+  private calibrationRepository?: ICalibrationRepository
 
-  constructor(repository: IImplementationRepository) {
+  constructor(repository: IImplementationRepository, calibrationRepository?: ICalibrationRepository) {
     this.repository = repository
+    this.calibrationRepository = calibrationRepository
   }
 
   /**
@@ -42,6 +64,7 @@ export class ImplementationService {
     const now = new Date().toISOString()
     const state: ImplementationState = {
       id,
+      ...(dto.userId ? { userId: dto.userId } : {}),
       courseId: dto.courseId,
       courseVersion: dto.courseVersion || '1.0.0',
       completedMissionIds: [],
@@ -49,6 +72,28 @@ export class ImplementationService {
       updatedAt: now,
     }
 
+    await this.repository.save(state)
+    return state
+  }
+
+  async updateLearnerSetup(implementationId: string, dto: LearnerSetupDTO): Promise<ImplementationState> {
+    const state = await this.repository.getById(implementationId)
+    if (!state) throw new Error(`Implementation '${implementationId}' not found`)
+    const goal = dto.goal?.trim()
+    if (!goal) throw new Error('goal is required')
+    if (!['15_30_MIN', '30_60_MIN', '1_2_HOURS', 'VARIES'].includes(dto.availableTime)) {
+      throw new Error('availableTime is invalid')
+    }
+    if (!['DIRECT', 'QUESTIONS', 'EXAMPLE', 'ADAPTIVE'].includes(dto.helpPreference)) {
+      throw new Error('helpPreference is invalid')
+    }
+    state.learnerSetup = {
+      goal: goal.slice(0, 300),
+      availableTime: dto.availableTime,
+      helpPreference: dto.helpPreference,
+      updatedAt: new Date().toISOString(),
+    }
+    state.updatedAt = new Date().toISOString()
     await this.repository.save(state)
     return state
   }
@@ -168,15 +213,6 @@ export class ImplementationService {
       )
     }
 
-    // 5. Idempotency short-circuit: If mission is already completed, preserve existing canonical artifact
-    if (state.completedMissionIds.includes(missionId)) {
-      return {
-        policyVerdict: 'PASS',
-        state,
-        completed: true,
-      }
-    }
-
     // Resolve consumed artifacts for this mission (e.g. 'premise' for N02/N03)
     const consumedArtifacts: Record<string, ImplementationArtifact> = {}
     if (mission.consumesArtifacts && mission.consumesArtifacts.length > 0) {
@@ -192,16 +228,61 @@ export class ImplementationService {
     }
 
     // 6. Evaluate evidence via the evaluator pipeline (Gemini/Mock -> Schema Validator -> applyEvaluationPolicy)
+    const calibration = await this.calibrationRepository?.getByMissionId(missionId)
     const evaluationResult = await evaluator.evaluateEvidence({
       missionId,
       evidence: trimmedEvidence,
       consumedArtifacts,
+      currentProgress: currentMissionState,
+      recentInteraction: normalizeRecentInteraction(dto.recentInteraction),
+      learnerHelpPreference: state.learnerSetup?.helpPreference,
+      evaluationRubric: calibration?.status === 'confirmed' ? calibration.proposedRubric : undefined,
     })
 
-    const { evaluation, policyVerdict } = evaluationResult
+    const { evaluation: rawEvaluation, policyVerdict } = evaluationResult
+    const evaluation = {
+      ...rawEvaluation,
+      message: adaptCompanionGuidance(
+        rawEvaluation.message || rawEvaluation.coachingFeedback,
+        state.learnerSetup?.helpPreference,
+        mission,
+        policyVerdict,
+      ),
+      coachingFeedback: adaptCompanionGuidance(
+        rawEvaluation.coachingFeedback,
+        state.learnerSetup?.helpPreference,
+        mission,
+        policyVerdict,
+      ),
+    }
+    const interactionType = evaluation.interactionType || 'EVIDENCE_SUBMISSION'
+    const message = evaluation.message || evaluation.coachingFeedback || ''
 
-    // 7. State Transition: ONLY if policyVerdict === 'PASS'
-    if (policyVerdict === 'PASS') {
+    // A completed mission can still receive a conversational reply. Evidence re-submissions remain
+    // idempotent and retain the canonical artifact that was already verified.
+    if (state.completedMissionIds.includes(missionId)) {
+      if (interactionType !== 'EVIDENCE_SUBMISSION') {
+        return {
+          interactionType,
+          message,
+          evaluation,
+          policyVerdict,
+          state,
+          completed: false,
+        }
+      }
+
+      return {
+        interactionType: 'EVIDENCE_SUBMISSION',
+        message: 'Esta misión ya quedó verificada. Podemos hablar de lo que sigue.',
+        policyVerdict: 'PASS',
+        state,
+        completed: true,
+      }
+    }
+
+    // 7. State Transition: ONLY if interactionType === 'EVIDENCE_SUBMISSION' AND policyVerdict === 'PASS'
+    if (interactionType === 'EVIDENCE_SUBMISSION' && policyVerdict === 'PASS') {
       const now = new Date().toISOString()
       let stateChanged = false
 
@@ -276,6 +357,8 @@ export class ImplementationService {
       }
 
       return {
+        interactionType,
+        message,
         evaluation,
         policyVerdict: 'PASS',
         state,
@@ -283,8 +366,10 @@ export class ImplementationService {
       }
     }
 
-    // 8. Non-PASS: Zero state mutation
+    // 8. Non-PASS / CONVERSATION / AMBIGUOUS: Zero state mutation
     return {
+      interactionType,
+      message,
       evaluation,
       policyVerdict,
       state,

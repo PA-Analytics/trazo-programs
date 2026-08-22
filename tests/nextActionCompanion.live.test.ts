@@ -9,7 +9,7 @@ import { GeminiNextActionProposer } from '../src/server/companion/geminiProposer
 import { course } from '../src/data/course.ts'
 import type { ImplementationState, NextActionProposal } from '../src/domain/course.ts'
 
-const runLive = process.env.RUN_LIVE_GEMINI === 'true' && Boolean(process.env.GEMINI_API_KEY)
+const runLive = process.env.RUN_LIVE_GEMINI === 'true' && (Boolean(process.env.GEMINI_API_KEY) || Boolean(process.env.GOOGLE_CLOUD_PROJECT))
 
 test('Live Gemini Next Action Diagnostic', { skip: !runLive }, async () => {
   const repository = new MemoryImplementationRepository()

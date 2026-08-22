@@ -6,11 +6,7 @@ interface HudBarProps {
   completed: number
   total: number
   activeMissionTitle?: string
-  implementationId?: string
-  localSessionIds?: string[]
   onRecenter: () => void
-  onNewSession?: () => void
-  onSelectLocalSession?: (id: string) => void
 }
 
 export function HudBar({
@@ -19,11 +15,7 @@ export function HudBar({
   completed,
   total,
   activeMissionTitle,
-  implementationId,
-  localSessionIds = [],
   onRecenter,
-  onNewSession,
-  onSelectLocalSession,
 }: HudBarProps) {
   return (
     <header className="hud-bar">
@@ -42,40 +34,6 @@ export function HudBar({
       </div>
 
       <div className="hud-bar__actions">
-        {implementationId && (
-          <div className="hud-bar__session" role="region" aria-label="Control de sesión">
-            {localSessionIds.length > 1 && onSelectLocalSession ? (
-              <select
-                className="hud-session-select"
-                aria-label="Seleccionar sesión local"
-                value={implementationId}
-                onChange={(event) => onSelectLocalSession(event.target.value)}
-              >
-                {localSessionIds.map((id) => (
-                  <option key={id} value={id}>
-                    Sesión {id.length > 16 ? `${id.slice(0, 14)}…` : id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="hud-session-badge" title={`Sesión activa: ${implementationId}`}>
-                <span className="hud-session-dot" aria-hidden="true" />
-                <span className="hud-session-text">Sesión</span>
-              </span>
-            )}
-            {onNewSession && (
-              <button
-                type="button"
-                className="hud-session-btn"
-                title="Crear una nueva sesión limpia en este navegador"
-                onClick={onNewSession}
-              >
-                + Nueva
-              </button>
-            )}
-          </div>
-        )}
-
         <span className="hud-bar__progress" aria-label={`${completed} de ${total} misiones verificadas`}>
           <strong>{completed} / {total}</strong> verificadas
         </span>

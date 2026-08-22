@@ -18,7 +18,7 @@ export interface QuestEdgeData extends Record<string, unknown> {
 
 export type QuestFlowEdge = Edge<QuestEdgeData, 'quest'>
 
-function smoothSplineThroughVia(
+export function smoothSplineThroughVia(
   sourceX: number,
   sourceY: number,
   targetX: number,

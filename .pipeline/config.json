@@ -4,11 +4,11 @@
   "active_profile": "default_gemini_heavy",
   "profiles": {
     "default_gemini_heavy": {
-      "description": "Perfil óptimo diario: Gemini 3.7 Flash como caballo de batalla, DeepSeek Flash Free para Red Team sin sesgo, GPT-5.6 Terra para arquitectura.",
+      "description": "Perfil óptimo diario: Gemini 3.7 Flash como caballo de batalla, OpenCode Zen para revisión sin sesgo, GPT-5.6 Terra para arquitectura.",
       "roles": {
         "orchestrator": {
           "provider": "antigravity",
-          "model": "gemini-3.7-flash",
+          "model": "gemini-3.7-flash-high",
           "tier": 0
         },
         "planner": {
@@ -18,22 +18,23 @@
         },
         "developer": {
           "provider": "antigravity",
-          "model": "gemini-3.7-flash",
+          "model": "gemini-3.7-flash-high",
+          "mode": "accept-edits",
           "tier": 0
         },
         "red_team": {
           "provider": "openzen",
-          "model": "deepseek-v4-flash-free",
+          "model": "opencode/deepseek-v4-flash-free",
           "tier": 0
         },
         "tester": {
           "provider": "openzen",
-          "model": "mimo-v2.5-free",
+          "model": "opencode/mimo-v2.5-free",
           "tier": 0
         },
         "docs": {
           "provider": "openzen",
-          "model": "mimo-v2.5-free",
+          "model": "opencode/mimo-v2.5-free",
           "tier": 0
         }
       }
@@ -58,7 +59,7 @@
         },
         "red_team": {
           "provider": "openzen",
-          "model": "deepseek-v4-flash-free",
+          "model": "opencode/deepseek-v4-flash-free",
           "tier": 0
         },
         "tester": {
@@ -68,17 +69,17 @@
         },
         "docs": {
           "provider": "openzen",
-          "model": "mimo-v2.5-free",
+          "model": "opencode/mimo-v2.5-free",
           "tier": 0
         }
       }
     },
     "emergency_sol": {
-      "description": "Perfil de escalación crítica (Tier 2): GPT-5.6 Sol para resolver bloqueos arquitectónicos o auditoría mayor.",
+      "description": "Perfil de escalación crítica: GPT-5.6 Sol para resolver bloqueos arquitectónicos y OpenCode Zen para auditoría.",
       "roles": {
         "orchestrator": {
           "provider": "antigravity",
-          "model": "gemini-3.7-flash",
+          "model": "gemini-3.7-flash-high",
           "tier": 0
         },
         "planner": {
@@ -92,18 +93,18 @@
           "tier": 1
         },
         "red_team": {
-          "provider": "nvidia_nim",
-          "model": "nemotron-3-ultra-550b",
-          "tier": 2
+          "provider": "openzen",
+          "model": "opencode/deepseek-v4-flash-free",
+          "tier": 0
         },
         "tester": {
           "provider": "antigravity",
-          "model": "gemini-3.7-flash",
+          "model": "gemini-3.7-flash-high",
           "tier": 0
         },
         "docs": {
           "provider": "openzen",
-          "model": "mimo-v2.5-free",
+          "model": "opencode/mimo-v2.5-free",
           "tier": 0
         }
       }
@@ -121,10 +122,6 @@
     "openzen": {
       "env_var": "OPENZEN_API_KEY",
       "endpoint": "https://api.opencodezen.com/v1"
-    },
-    "nvidia_nim": {
-      "env_var": "NVIDIA_API_KEY",
-      "endpoint": "https://integrate.api.nvidia.com/v1"
     }
   }
 }

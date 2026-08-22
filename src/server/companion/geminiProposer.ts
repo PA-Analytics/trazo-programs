@@ -1,73 +1,42 @@
-import { GoogleGenAI } from '@google/genai'
 import type { NextActionProposal } from '../../domain/course.ts'
 import {
   COMPANION_NEXT_ACTION_SYSTEM_PROMPT,
   buildNextActionUserPrompt,
 } from './prompts.ts'
-import type { INextActionProposer, NextActionContext } from './types.ts'
-
-export interface GeminiNextActionProposerOptions {
-  apiKey?: string
-  modelName?: string
-  project?: string
-  location?: string
-}
+import type { INextActionProposer, NextActionContext, NextActionLatencyTrace } from './types.ts'
+import { createCanonicalGeminiRuntime, type CanonicalGeminiRuntime } from '../ai/runtime.ts'
 
 export class GeminiNextActionProposer implements INextActionProposer {
-  private ai: GoogleGenAI
-  private modelName: string
+  private readonly runtime: CanonicalGeminiRuntime
 
-  constructor(optionsOrApiKey?: string | GeminiNextActionProposerOptions, modelName?: string) {
-    let opts: GeminiNextActionProposerOptions = {}
-    if (typeof optionsOrApiKey === 'string') {
-      opts = { apiKey: optionsOrApiKey, modelName }
-    } else if (optionsOrApiKey) {
-      opts = optionsOrApiKey
-    }
-
-    this.modelName = (opts.modelName || modelName || process.env.GEMINI_MODEL || 'gemini-3.7-flash').trim()
-
-    const rawKey = opts.apiKey || process.env.GEMINI_API_KEY
-    const explicitProject = opts.project || process.env.GOOGLE_CLOUD_PROJECT
-    const location = opts.location || process.env.GOOGLE_CLOUD_LOCATION || 'global'
-
-    if (opts.apiKey) {
-      this.ai = new GoogleGenAI({ apiKey: opts.apiKey.trim() })
-    } else if (rawKey && !explicitProject) {
-      this.ai = new GoogleGenAI({ apiKey: rawKey.trim() })
-    } else {
-      const project = explicitProject || 'trazo-agentic-2026'
-      this.ai = new GoogleGenAI({
-        vertexai: true,
-        project,
-        location,
-      })
-    }
+  constructor(runtime: CanonicalGeminiRuntime = createCanonicalGeminiRuntime()) {
+    this.runtime = runtime
   }
 
   async proposeNextAction(context: NextActionContext): Promise<NextActionProposal> {
-    const systemPrompt = COMPANION_NEXT_ACTION_SYSTEM_PROMPT
+    const promptStartedAt = performance.now()
     const userPrompt = buildNextActionUserPrompt(context)
+    const promptBuildMs = performance.now() - promptStartedAt
 
     let lastError: unknown = null
     const maxRetries = 4
+    let vertexMs = 0
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await this.ai.models.generateContent({
-          model: this.modelName,
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }],
-            },
-          ],
+        const vertexStartedAt = performance.now()
+        const response = await this.runtime.generateContent({
+          model: this.runtime.model,
+          contents: userPrompt,
           config: {
+            systemInstruction: COMPANION_NEXT_ACTION_SYSTEM_PROMPT,
             responseMimeType: 'application/json',
             temperature: 0.1,
           },
         })
+        vertexMs += performance.now() - vertexStartedAt
 
+        const validationStartedAt = performance.now()
         const rawText = response.text || ''
         const parsed = JSON.parse(rawText) as NextActionProposal
 
@@ -79,22 +48,40 @@ export class GeminiNextActionProposer implements INextActionProposer {
           if (!parsed.question?.trim()) {
             throw new Error('ASK_CLARIFICATION requires non-empty question')
           }
-          return {
+          const proposal: NextActionProposal = {
             type: 'ASK_CLARIFICATION',
             question: parsed.question.trim(),
             rationale: parsed.rationale?.trim() || 'Aclarar preferencia de formato.',
           }
+          this.emitLatencyTrace(context, {
+            attempts: attempt,
+            promptBuildMs,
+            vertexMs,
+            validationMs: performance.now() - validationStartedAt,
+            promptCharacters: COMPANION_NEXT_ACTION_SYSTEM_PROMPT.length + userPrompt.length,
+            outputCharacters: rawText.length,
+          }, response)
+          return proposal
         }
 
         if (parsed.type === 'RECOMMEND_MISSION') {
           if (!parsed.missionId?.trim()) {
             throw new Error('RECOMMEND_MISSION requires non-empty missionId')
           }
-          return {
+          const proposal: NextActionProposal = {
             type: 'RECOMMEND_MISSION',
             missionId: parsed.missionId.trim(),
             rationale: parsed.rationale?.trim() || 'Ruta recomendada.',
           }
+          this.emitLatencyTrace(context, {
+            attempts: attempt,
+            promptBuildMs,
+            vertexMs,
+            validationMs: performance.now() - validationStartedAt,
+            promptCharacters: COMPANION_NEXT_ACTION_SYSTEM_PROMPT.length + userPrompt.length,
+            outputCharacters: rawText.length,
+          }, response)
+          return proposal
         }
 
         throw new Error(`Unknown proposal type: ${(parsed as any).type}`)
@@ -132,5 +119,28 @@ export class GeminiNextActionProposer implements INextActionProposer {
     }
 
     throw lastError || new Error('Failed to propose next action with Gemini')
+  }
+
+  private emitLatencyTrace(
+    context: NextActionContext,
+    trace: NextActionLatencyTrace,
+    response: unknown,
+  ) {
+    const usage = (response as {
+      usageMetadata?: {
+        promptTokenCount?: number
+        candidatesTokenCount?: number
+        thoughtsTokenCount?: number
+        totalTokenCount?: number
+      }
+    }).usageMetadata
+
+    context.onLatencyTrace?.({
+      ...trace,
+      promptTokens: usage?.promptTokenCount,
+      outputTokens: usage?.candidatesTokenCount,
+      thoughtsTokens: usage?.thoughtsTokenCount,
+      totalTokens: usage?.totalTokenCount,
+    })
   }
 }

@@ -16,11 +16,6 @@ async function runCalibration() {
   console.log('  TRAZO LIVE CALIBRATION — TASK-006B: State-Aware Next Action Companion')
   console.log('======================================================================\n')
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('ERROR: GEMINI_API_KEY is not set in the environment.')
-    process.exit(1)
-  }
-
   const repository = new MemoryImplementationRepository()
   const service = new ImplementationService(repository)
   const proposer = new GeminiNextActionProposer()
