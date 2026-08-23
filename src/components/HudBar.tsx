@@ -1,4 +1,6 @@
 import { CenterIcon } from './icons'
+import type { UserProfile } from '../domain/identity'
+import { ProfileSwitcher } from './ProfileSwitcher'
 
 interface HudBarProps {
   chapterNumber: string
@@ -6,6 +8,8 @@ interface HudBarProps {
   completed: number
   total: number
   activeMissionTitle?: string
+  profile: UserProfile
+  onProfileOpen: () => void
   onRecenter: () => void
 }
 
@@ -15,6 +19,8 @@ export function HudBar({
   completed,
   total,
   activeMissionTitle,
+  profile,
+  onProfileOpen,
   onRecenter,
 }: HudBarProps) {
   return (
@@ -47,6 +53,7 @@ export function HudBar({
         >
           <CenterIcon />
         </button>
+        <ProfileSwitcher profile={profile} onOpen={onProfileOpen} />
       </div>
     </header>
   )

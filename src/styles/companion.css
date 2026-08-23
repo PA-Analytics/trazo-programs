@@ -338,10 +338,12 @@
   transform: translateX(-50%);
   width: 320px;
   max-width: min(340px, 85vw);
-  background: var(--trazo-surface, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--trazo-ink) 18%, transparent);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(20, 26, 22, 0.16);
+  background: var(--trazo-paper);
+  border: 2px solid var(--trazo-ink);
+  border-radius: 14px 4px 14px 4px;
+  box-shadow:
+    0 4px 0 var(--trazo-ink),
+    0 18px 30px -22px rgb(20 26 22 / 0.58);
   z-index: 60;
   overflow: hidden;
   display: flex;
@@ -375,9 +377,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--trazo-bg, #f7f7f4);
-  border-bottom: 1px solid color-mix(in srgb, var(--trazo-ink) 10%, transparent);
+  min-height: 52px;
+  padding: 4px 6px 4px 14px;
+  color: var(--trazo-paper);
+  background: var(--trazo-ink);
+  border-bottom: 2px solid var(--trazo-indigo);
 }
 
 .trazo-panel-title-group {
@@ -391,32 +395,36 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--trazo-muted);
+  color: var(--trazo-indigo-light);
 }
 
 .trazo-panel-header h4 {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--trazo-ink);
+  color: var(--trazo-paper);
   font-family: var(--trazo-font-display, Anton, sans-serif);
   letter-spacing: 0.02em;
 }
 
 .trazo-panel-close-btn {
-  background: none;
-  border: none;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  color: var(--trazo-paper);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--trazo-paper) 34%, transparent);
   font-size: 0.85rem;
   cursor: pointer;
-  color: var(--trazo-muted);
-  padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 8px 2px 8px 2px;
   line-height: 1;
 }
 
 .trazo-panel-close-btn:hover {
-  background: color-mix(in srgb, var(--trazo-ink) 8%, transparent);
   color: var(--trazo-ink);
+  background: var(--trazo-paper);
 }
 
 .trazo-panel-close-btn:focus-visible {
@@ -424,12 +432,59 @@
 }
 
 .trazo-panel-body {
-  padding: 12px 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   max-height: 280px;
   overflow-y: auto;
+}
+
+.trazo-panel-wayfinder {
+  display: grid;
+  gap: 7px;
+  padding-left: 12px;
+  border-left: 3px solid var(--trazo-indigo);
+}
+
+.trazo-panel-wayfinder > span {
+  color: var(--trazo-indigo);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trazo-panel-wayfinder > strong {
+  color: var(--trazo-ink);
+  font-family: var(--trazo-font-display);
+  font-size: 1.45rem;
+  font-weight: 400;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.trazo-panel-wayfinder > p {
+  margin: 0;
+  color: var(--trazo-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.trazo-panel-route-btn {
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--trazo-paper);
+  background: var(--trazo-indigo);
+  border: 2px solid var(--trazo-ink);
+  border-radius: 12px 3px 12px 3px;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.trazo-panel-route-btn:hover {
+  background: var(--trazo-ink);
 }
 
 .trazo-panel-turns {
@@ -589,4 +644,3 @@
     transition: none !important;
   }
 }
-

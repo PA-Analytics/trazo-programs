@@ -22,8 +22,9 @@ export function ProfileSwitcher({ profile, onOpen }: ProfileSwitcherProps) {
     <div className="profile-switcher" data-testid="profile-switcher">
       <span className="profile-switcher__name">{profile.displayName}</span>
       <span className="profile-switcher__role">{roleLabel(profile.role)}</span>
-      <button type="button" className="profile-switcher__button" onClick={onOpen}>
-        Cambiar perfil
+      <button type="button" className="profile-switcher__button" aria-label="Cambiar perfil" onClick={onOpen}>
+        <span className="profile-switcher__button-label">Cambiar perfil</span>
+        <span className="profile-switcher__button-label-mobile" aria-hidden="true">Perfil</span>
       </button>
     </div>
   )
@@ -57,15 +58,17 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
 
   return (
     <main className="entry-shell profile-selection-shell" aria-labelledby="profile-selection-title">
-      <div className="entry-card entry-card--wide">
-        <span className="setup-eyebrow">TRAZO · PERFILES</span>
-        <h1 id="profile-selection-title">¿Quién va a continuar?</h1>
-        <p>Elige un perfil para volver a su recorrido guardado.</p>
+      <div className="entry-card entry-card--wide profile-selection-card">
+        <header className="profile-selection-intro">
+          <span className="setup-eyebrow">TRAZO · RUTAS GUARDADAS</span>
+          <h1 id="profile-selection-title">¿Quién va a continuar?</h1>
+          <p>Elige el recorrido que quieres retomar. Cada perfil conserva su propio punto en la ruta.</p>
+        </header>
         {isLoading && <p className="entry-loading">Cargando perfiles…</p>}
         {error && <p className="setup-error" role="alert">{error}</p>}
         {!isLoading && !error && (
           <div className="profile-selection-list" role="list" aria-label="Perfiles guardados">
-            {profiles.map((item) => (
+            {profiles.map((item, index) => (
               <button
                 type="button"
                 className="profile-selection-item"
@@ -73,11 +76,15 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
                 key={item.userId}
                 onClick={() => onSelect(item.userId)}
               >
-                <span>
-                  <strong>{item.displayName}</strong>
-                  <small>{roleLabel(item.role)}</small>
+                <span className="profile-selection-item__waypoint" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
                 </span>
-                {item.userId === activeProfileId && <span className="profile-selection-item__current">Actual</span>}
+                <span className="profile-selection-item__identity">
+                  <strong>{item.displayName}</strong>
+                  <small>{roleLabel(item.role)} · recorrido guardado</small>
+                </span>
+                {item.userId === activeProfileId && <span className="profile-selection-item__current">Ruta actual</span>}
+                <span className="profile-selection-item__arrow" aria-hidden="true">→</span>
               </button>
             ))}
           </div>

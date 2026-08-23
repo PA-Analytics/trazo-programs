@@ -50,6 +50,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
       initialPosition,
       userId,
       implementationId,
+      activeMissionId,
       availableMissions,
       onStartMission,
       onSelectMission,
@@ -309,6 +310,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
       moving: 'En camino',
       verified: 'Modo TRAZO (Verificado)',
     }
+    const contextMission =
+      availableMissions.find((mission) => mission.id === activeMissionId) ?? availableMissions[0]
 
     return (
       <div
@@ -439,6 +442,28 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
                     onClick={() => void fetchNextAction(undefined, decisionTurns)}
                   >
                     Reintentar
+                  </button>
+                </div>
+              )}
+
+              {!isLoading && !error && !proposal && contextMission && (
+                <div className="trazo-panel-wayfinder">
+                  <span>En ruta</span>
+                  <strong>{contextMission.title}</strong>
+                  <p>
+                    {activeMissionId
+                      ? 'Este es tu trabajo actual. Abre la misión para continuar con la evidencia.'
+                      : 'Esta misión está disponible. Ábrela para revisar el trabajo requerido.'}
+                  </p>
+                  <button
+                    type="button"
+                    className="trazo-panel-route-btn"
+                    onClick={() => {
+                      onSelectMission(contextMission.id)
+                      setIsOpen(false)
+                    }}
+                  >
+                    Abrir misión →
                   </button>
                 </div>
               )}

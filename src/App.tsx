@@ -44,6 +44,19 @@ function getPrerequisiteSummary(mission: Mission, chapter: Chapter) {
   return undefined
 }
 
+function getUnlockSummary(mission: Mission, chapter: Chapter) {
+  const titleById = new Map(chapter.missions.map((item) => [item.id, item.title]))
+  const nextTitles = [...new Set(
+    chapter.edges
+      .filter((edge) => edge.source === mission.id)
+      .map((edge) => titleById.get(edge.target) ?? edge.target),
+  )]
+
+  return nextTitles.length > 0
+    ? `Al verificar, se abre: ${nextTitles.join(' o ')}.`
+    : 'Al verificar, completas este recorrido.'
+}
+
 export function App() {
   const [activeUserId, setActiveUserId] = useState(() => localStorage.getItem('trazo_active_user_id') || '')
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -142,10 +155,10 @@ export function App() {
   }, [])
 
   const withProfileSwitcher = (content: ReactNode) => (
-    <>
+    <div className="profile-context-shell">
       <ProfileSwitcher profile={profile!} onOpen={() => setShowProfileSelection(true)} />
       {content}
-    </>
+    </div>
   )
 
   const loadImplementation = useCallback(async () => {
@@ -210,6 +223,16 @@ export function App() {
   const activeMission = activeChapter.missions.find(
     (mission) => mission.id === implementationState?.activeMissionId,
   )
+  const visualProgress = useMemo(() => {
+    if (!activeMission || !['available', 'active', 'submitted'].includes(progress[activeMission.id])) {
+      return progress
+    }
+
+    return {
+      ...progress,
+      [activeMission.id]: 'active' as const,
+    }
+  }, [activeMission, progress])
   const lockedReasons = useMemo(
     () =>
       Object.fromEntries(
@@ -509,7 +532,7 @@ export function App() {
     return withProfileSwitcher(<LearnerQuickSetup userId={profile.userId} implementationId={implementationId} onComplete={setImplementationState} />)
   }
 
-  return withProfileSwitcher(
+  return (
     <div className="app-shell">
       <ChapterNavigation
         course={course}
@@ -523,12 +546,14 @@ export function App() {
           completed={completedCount}
           total={activeChapter.missions.length}
           activeMissionTitle={activeMission?.title}
+          profile={profile}
+          onProfileOpen={() => setShowProfileSelection(true)}
           onRecenter={() => setRecenterRequest((request) => request + 1)}
         />
         <QuestMap
           userId={profile.userId}
           chapter={activeChapter}
-          progress={progress}
+          progress={visualProgress}
           evaluationStateByMissionId={evaluationStateByMissionId}
           recommendedMissionId={recommendedMissionId}
           selectedMissionId={selectedMissionId}
@@ -549,9 +574,10 @@ export function App() {
         <MissionPanel
           key={selectedMission.id}
           mission={selectedMission}
-          progressState={progress[selectedMission.id]}
+          progressState={visualProgress[selectedMission.id]}
           lockedReason={lockedReasons[selectedMission.id]}
           prerequisiteSummary={getPrerequisiteSummary(selectedMission, activeChapter)}
+          unlockSummary={getUnlockSummary(selectedMission, activeChapter)}
           evidence={evidenceByMissionId[selectedMission.id] ?? ''}
           interactionHistory={interactionHistoryByMissionId[selectedMission.id] ?? []}
           evaluationState={evaluationStateByMissionId[selectedMission.id]}
@@ -565,6 +591,6 @@ export function App() {
       <div className="visually-hidden" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
-    </div>,
+    </div>
   )
 }

@@ -16,6 +16,7 @@ interface MissionPanelProps {
   progressState: ProgressState
   lockedReason?: string
   prerequisiteSummary?: string
+  unlockSummary: string
   evidence: string
   interactionHistory: MissionInteractionTurn[]
   evaluationState?: MissionEvaluationState
@@ -30,6 +31,7 @@ export function MissionPanel({
   progressState,
   lockedReason,
   prerequisiteSummary,
+  unlockSummary,
   evidence,
   interactionHistory,
   evaluationState,
@@ -54,6 +56,29 @@ export function MissionPanel({
   })
   const showEvaluationFeedback =
     evaluationPresentation.state !== 'editing' && evaluationPresentation.state !== 'ready'
+  const verificationResolved =
+    progressState === 'completed' || evaluationPresentation.state === 'verified'
+  const verificationStarted = showEvaluationFeedback || isEvaluating
+  const actionFlowState =
+    progressState === 'locked'
+      ? 'blocked'
+      : progressState === 'completed' || hasEvidence || verificationStarted
+        ? 'complete'
+        : 'active'
+  const evidenceFlowState =
+    progressState === 'locked'
+      ? 'blocked'
+      : progressState === 'completed' || verificationStarted || verificationResolved
+        ? 'complete'
+        : hasEvidence
+          ? 'active'
+          : 'pending'
+  const verificationFlowState = verificationResolved
+    ? 'complete'
+    : verificationStarted
+      ? 'active'
+      : 'pending'
+  const routeFlowState = verificationResolved ? 'complete' : 'pending'
 
   const evidenceFieldId = `mission-evidence-${mission.id}`
   const evidenceCriteriaId = `mission-evidence-criteria-${mission.id}`
@@ -130,6 +155,7 @@ export function MissionPanel({
       className="mission-panel"
       data-closing={closing}
       data-node-type={mission.nodeType}
+      data-progress={progressState}
       role="dialog"
       aria-modal="true"
       aria-labelledby="mission-panel-title"
@@ -169,6 +195,21 @@ export function MissionPanel({
         {mission.description}
       </p>
 
+      <ol className="mission-flow" aria-label="Secuencia de avance de esta misión">
+        {[
+          ['01', 'Acción', actionFlowState],
+          ['02', 'Evidencia', evidenceFlowState],
+          ['03', 'Verificación', verificationFlowState],
+          ['04', 'Ruta', routeFlowState],
+        ].map(([number, label, state]) => (
+          <li key={label} data-state={state}>
+            <span aria-hidden="true">{number}</span>
+            <strong>{label}</strong>
+            <small>{state === 'complete' ? 'Listo' : state === 'active' ? 'Ahora' : state === 'blocked' ? 'Bloqueado' : 'Después'}</small>
+          </li>
+        ))}
+      </ol>
+
       {/* Consequential Artifact Consumer Section (TASK-005 & TASK-011) */}
       {mission.consumesArtifacts?.includes('premise') && (
         <section className="mission-prior-artifact" aria-labelledby="prior-artifact-heading">
@@ -205,6 +246,7 @@ export function MissionPanel({
       <section className="mission-panel__section" aria-labelledby="route-heading">
         <h3 id="route-heading">Condición de ruta</h3>
         <p>{prerequisiteSummary ?? 'Punto de partida del capítulo.'}</p>
+        <p className="mission-panel__unlock">{unlockSummary}</p>
       </section>
 
       <section className="evidence-section" aria-labelledby="evidence-heading">

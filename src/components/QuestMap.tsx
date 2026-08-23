@@ -335,6 +335,22 @@ function QuestMapCanvas({
   }, [fitMap, instance, recenterRequest])
 
   useEffect(() => {
+    if (!instance || !mapContainerRef.current || selectedMissionId || !activeOrInitialMission) return
+    if (mapContainerRef.current.clientWidth > 640) return
+
+    const size = getNodeDimension(activeOrInitialMission)
+    const timer = window.setTimeout(() => {
+      void instance.setCenter(
+        activeOrInitialMission.position.x + size / 2,
+        activeOrInitialMission.position.y + size / 2,
+        { zoom: 0.72, duration: 0 },
+      )
+    }, 80)
+
+    return () => window.clearTimeout(timer)
+  }, [activeOrInitialMission, instance, selectedMissionId])
+
+  useEffect(() => {
     if (!instance || !selectedMissionId || !mapContainerRef.current) return
     const mission = chapter.missions.find((item) => item.id === selectedMissionId)
     if (!mission) return
