@@ -140,7 +140,7 @@ function QuestMapCanvas({
     chapter.missions[0]
 
   const companionInitialPos = useMemo(() => {
-    if (!activeOrInitialMission) return { x: 110, y: 380 }
+    if (!activeOrInitialMission) return { x: 0, y: 0 }
     return getCompanionRestPosition(activeOrInitialMission)
   }, [activeOrInitialMission])
 
@@ -408,9 +408,10 @@ function QuestMapCanvas({
       <p id="quest-map-instructions" className="visually-hidden">
         Mapa de misiones. Usa Tab para recorrer las misiones y Enter para abrir sus detalles.
         Usa las flechas para desplazar el mapa y los controles para acercar, alejar o volver a
-        encuadrar la ruta. El capítulo recorre tres territorios: Taller, desde la premisa hasta
-        el ensamble; Campo, donde publicas, observas y decides; y Mercado, el destino de la
-        primera pieza publicada.
+        encuadrar la ruta.
+        {chapter.regions && chapter.regions.length > 0 && (
+          <> El capítulo recorre {chapter.regions.length} territorios: {chapter.regions.map((region) => `${region.title}, ${region.description.toLocaleLowerCase('es-MX')}`).join('; ')}.</>
+        )}
       </p>
       <ReactFlow<MapNode, QuestFlowEdge>
         nodes={nodes}
@@ -433,7 +434,7 @@ function QuestMapCanvas({
         zoomOnScroll
         zoomOnPinch
         preventScrolling
-        aria-label="Mapa visual de misiones del Chapter 1"
+        aria-label="Mapa visual de misiones"
         proOptions={{ hideAttribution: true }}
       >
         <ViewportOverlay containerRef={mapContainerRef}>

@@ -51,6 +51,13 @@ export const course: Course = {
             ],
           },
           producesArtifacts: ['premise'],
+          artifactProductions: [
+            {
+              key: 'premise',
+              build: { evidenceField: 'statement' },
+              displayLabel: 'Premisa verificada',
+            },
+          ],
         },
         {
           id: 'N02',
@@ -67,6 +74,16 @@ export const course: Course = {
             'Incluye apertura, desarrollo y cierre en un orden que pueda ejecutarse.',
           consumesArtifacts: ['premise'],
           producesArtifacts: ['direct_structure'],
+          artifactProductions: [
+            {
+              key: 'direct_structure',
+              build: {
+                evidenceField: 'content',
+                variant: 'direct',
+                linkedConsumed: { property: 'sourcePremiseArtifactId', key: 'premise' },
+              },
+            },
+          ],
           rubric: {
             id: 'rubric-n02',
             version: '1.0.0',
@@ -110,6 +127,16 @@ export const course: Course = {
             'Debe identificar una situación inicial, un cambio y una resolución conectada con la premisa.',
           consumesArtifacts: ['premise'],
           producesArtifacts: ['narrative_structure'],
+          artifactProductions: [
+            {
+              key: 'narrative_structure',
+              build: {
+                evidenceField: 'content',
+                variant: 'narrative',
+                linkedConsumed: { property: 'sourcePremiseArtifactId', key: 'premise' },
+              },
+            },
+          ],
           rubric: {
             id: 'rubric-n03',
             version: '1.0.0',

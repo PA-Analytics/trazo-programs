@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CalibrationExample, CalibrationVerdict, CreatorCalibration, Mission } from '../domain/course'
 import type { CalibrationMode } from '../domain/identity'
+import { RouteRail } from './RouteRail'
 
 interface CreatorCalibrationViewProps {
   mission: Mission
@@ -142,7 +143,17 @@ export function CreatorCalibrationView({ mission, userId, initialMode = 'mixed_e
   }
 
   return (
-    <main className="calibration-shell" aria-labelledby="calibration-title">
+    <main className="calibration-shell calibration-shell--route" aria-labelledby="calibration-title">
+      <RouteRail
+        label="Proceso de calibración"
+        stages={[
+          { label: 'Resultado', state: 'complete' },
+          { label: 'Evidencia', state: calibration ? 'complete' : 'current' },
+          { label: 'Calibración', state: calibration ? 'current' : 'future' },
+          { label: 'Juicio', state: 'future' },
+        ]}
+      />
+      <div className="calibration-route__content">
       <header className="calibration-header">
         {onBack && (
           <button type="button" className="calibration-back" onClick={onBack}>
@@ -396,6 +407,7 @@ export function CreatorCalibrationView({ mission, userId, initialMode = 'mixed_e
           </section>
         </>
       )}
+      </div>
     </main>
   )
 }

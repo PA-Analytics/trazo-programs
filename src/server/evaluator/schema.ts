@@ -32,6 +32,26 @@ const ALLOWED_INTERACTION_TYPES: ReadonlySet<string> = new Set<MissionInteractio
   'AMBIGUOUS',
 ])
 
+const UNSAFE_INSTRUCTION_PATTERNS = [
+  /ignore\s+(all\s+)?previous\s+instructions/i,
+  /<\s*system_instruction\s*>/i,
+  /<\s*system_prompt\s*>/i,
+  /SYSTEM\s+PROMPT:/i,
+  /override\s+(all\s+)?criteria/i,
+  /you\s+must\s+(always\s+)?output\s+PASS/i,
+  /grant\s+automatic\s+pass/i,
+]
+
+function assertSafeText(text: string, fieldName: string): void {
+  for (const pattern of UNSAFE_INSTRUCTION_PATTERNS) {
+    if (pattern.test(text)) {
+      throw new EvaluationValidationError(
+        `${fieldName} contains unsafe instruction-like content: ${pattern.source}`,
+      )
+    }
+  }
+}
+
 /**
  * Validates untrusted LLM output at runtime against the mission rubric and interaction contract.
  * Throws EvaluationValidationError if the response is malformed, ensuring
@@ -46,6 +66,11 @@ export function validateEvidenceEvaluation(
   }
 
   const candidate = raw as Record<string, unknown>
+
+  // Reject opaque numeric scores at top-level
+  if (typeof candidate.score === 'number' || typeof candidate.numericScore === 'number') {
+    throw new EvaluationValidationError('Opaque numeric scores are not permitted in evaluation output')
+  }
 
   // 1. Validate / default interactionType
   let interactionType: MissionInteractionType = 'EVIDENCE_SUBMISSION'
@@ -72,6 +97,8 @@ export function validateEvidenceEvaluation(
   if (!messageCandidate) {
     throw new EvaluationValidationError('message or coachingFeedback must be a non-empty string')
   }
+
+  assertSafeText(messageCandidate, 'message/coachingFeedback')
 
   // 3. For CONVERSATION and AMBIGUOUS, criteria array is not required
   if (interactionType === 'CONVERSATION' || interactionType === 'AMBIGUOUS') {
@@ -104,6 +131,10 @@ export function validateEvidenceEvaluation(
 
     const cItem = item as Record<string, unknown>
 
+    if (typeof cItem.score === 'number') {
+      throw new EvaluationValidationError(`criteria[${i}].score opaque score is not permitted`)
+    }
+
     if (typeof cItem.criterionId !== 'string' || !cItem.criterionId.trim()) {
       throw new EvaluationValidationError(`criteria[${i}].criterionId must be a non-empty string`)
     }
@@ -121,7 +152,7 @@ export function validateEvidenceEvaluation(
     }
     seenCriterionIds.add(cItem.criterionId)
 
-    if (typeof cItem.status !== 'string' || !ALLOWED_STATUSES.has(cItem.status)) {
+    if (typeof cItem.status !== 'string' || !ALLOWED_STATUSES.has(cItem.status as CriterionVerdict)) {
       throw new EvaluationValidationError(
         `criteria[${i}].status '${cItem.status}' is not valid (allowed: PASS, NOT_MET, UNVERIFIABLE)`,
       )
@@ -131,10 +162,13 @@ export function validateEvidenceEvaluation(
       throw new EvaluationValidationError(`criteria[${i}].rationale must be a non-empty string`)
     }
 
+    assertSafeText(cItem.rationale, `criteria[${i}].rationale`)
+
     validatedCriteria.push({
       criterionId: cItem.criterionId,
       status: cItem.status as CriterionVerdict,
       rationale: cItem.rationale.trim(),
+      ...(typeof cItem.evidenceReference === 'string' ? { evidenceReference: cItem.evidenceReference.trim() } : {}),
     })
   }
 
@@ -157,6 +191,45 @@ export function validateEvidenceEvaluation(
     validatedRecommendation = candidate.recommendation as StructuredEvidenceEvaluation['recommendation']
   }
 
+  let validatedQualitySignals: StructuredEvidenceEvaluation['qualitySignals']
+  if (Array.isArray(candidate.qualitySignals)) {
+    const allowedQualitySignalIds = new Set((rubric?.qualitySignals ?? []).map((signal) => signal.id))
+    validatedQualitySignals = candidate.qualitySignals
+      .filter((q): q is Record<string, unknown> => typeof q === 'object' && q !== null)
+      .map((q) => ({
+        criterionId: typeof q.criterionId === 'string' ? q.criterionId : '',
+        status: (typeof q.status === 'string' ? q.status : 'NOT_APPLICABLE') as CriterionVerdict | 'NOT_APPLICABLE',
+        rationale: typeof q.rationale === 'string' ? q.rationale.trim() : '',
+      }))
+      .filter((q) => q.criterionId.length > 0)
+    for (const signal of validatedQualitySignals) {
+      if (!allowedQualitySignalIds.has(signal.criterionId)) {
+        throw new EvaluationValidationError(
+          `qualitySignals criterionId '${signal.criterionId}' does not exist in rubric quality signals`,
+        )
+      }
+      if (!signal.rationale) {
+        throw new EvaluationValidationError(`qualitySignals '${signal.criterionId}' requires a rationale`)
+      }
+      assertSafeText(signal.rationale, `qualitySignals '${signal.criterionId}' rationale`)
+    }
+  }
+
+  if (candidate.criteriaVersion !== undefined && candidate.criteriaVersion !== rubric?.version) {
+    throw new EvaluationValidationError(
+      `criteriaVersion '${String(candidate.criteriaVersion)}' does not match rubric version '${rubric?.version ?? 'unknown'}'`,
+    )
+  }
+
+  const clarificationText = typeof candidate.clarificationText === 'string'
+    ? candidate.clarificationText.trim()
+    : undefined
+  const escalationReason = typeof candidate.escalationReason === 'string'
+    ? candidate.escalationReason.trim()
+    : undefined
+  if (clarificationText) assertSafeText(clarificationText, 'clarificationText')
+  if (escalationReason) assertSafeText(escalationReason, 'escalationReason')
+
   return {
     interactionType: 'EVIDENCE_SUBMISSION',
     message: messageCandidate,
@@ -164,5 +237,9 @@ export function validateEvidenceEvaluation(
     criteria: validatedCriteria,
     confidence: validatedConfidence,
     recommendation: validatedRecommendation,
+    criteriaVersion: typeof candidate.criteriaVersion === 'string' ? candidate.criteriaVersion : rubric?.version,
+    qualitySignals: validatedQualitySignals,
+    clarificationText,
+    escalationReason,
   }
 }

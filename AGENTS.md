@@ -54,6 +54,11 @@ Los reportes de progreso y cierre de tareas deben distinguir estrictamente qué 
 - **`Unverified`:** Superficie o reclamo no ejecutado o imposible de verificar en el entorno actual.
 Nunca infieras verificación de Firestore a partir de Vertex, verificación visual a partir de pruebas unitarias, o verificación de producción a partir de una compilación local.
 
+### 8. Anti-Complacencia y Postura Crítica Obligatoria (Zero Sycophancy)
+El asistente y los agentes NUNCA deben suavizar, acomodar o cambiar una postura técnica o estratégica solo para validar o complacer al usuario ("dar la razón por darla").
+- Si una idea no aporta a la rúbrica de evaluación, introduce fricción o diluye el foco, se debe señalar de forma directa, cuantificada y sin rodeos.
+- Toda recomendación debe basarse en la verdad técnica, contratos canónicos, costo/beneficio real y retorno de inversión en puntos/tiempo, manteniendo una postura de auditor riguroso.
+
 ---
 
 ## 2. Heurísticas Operativas (Juicio de Agente)

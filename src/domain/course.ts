@@ -20,18 +20,35 @@ export interface MapPosition {
   y: number
 }
 
+export type CriterionKind =
+  | 'hard_requirement'
+  | 'quality_signal'
+  | 'rejection_condition'
+  | 'human_review_trigger'
+
 export interface RubricCriterion {
   id: string
   label: string
   description: string
   isRequired: boolean
+  kind?: CriterionKind
+  rejectionConditions?: string[]
+  humanReviewTriggers?: string[]
+  positiveExamples?: string[]
+  counterExamples?: string[]
 }
 
 export interface Rubric {
   id: string
   version: string
   criteria: RubricCriterion[]
+  qualitySignals?: RubricCriterion[]
   systemInstructions?: string
+  coachId?: string
+  courseId?: string
+  missionId?: string
+  status?: 'draft' | 'proposed' | 'confirmed' | 'active' | 'archived'
+  updatedAt?: string
 }
 
 export type CriterionVerdict = 'PASS' | 'NOT_MET' | 'UNVERIFIABLE'
@@ -40,6 +57,7 @@ export interface CriterionResult {
   criterionId: string
   status: CriterionVerdict
   rationale: string
+  evidenceReference?: string
 }
 
 export type AgentRecommendation = 'PASS' | 'CLARIFY' | 'REWORK' | 'HUMAN_REVIEW'
@@ -61,6 +79,12 @@ export interface NextActionTurn {
   content: string
 }
 
+export interface QualitySignalResult {
+  criterionId: string
+  status: CriterionVerdict | 'NOT_APPLICABLE'
+  rationale: string
+}
+
 export interface StructuredEvidenceEvaluation {
   interactionType?: MissionInteractionType
   message?: string
@@ -72,6 +96,12 @@ export interface StructuredEvidenceEvaluation {
   submissionId?: string
   missionId?: string
   evaluatedAt?: string
+  criteriaVersion?: string
+  missingRequirements?: string[]
+  qualitySignals?: QualitySignalResult[]
+  clarificationText?: string
+  escalationReason?: string
+  evidenceHash?: string
 }
 
 export type NextActionProposal =
@@ -136,6 +166,37 @@ export interface NarrativeStructureArtifactValue {
   sourcePremiseArtifactId?: string
 }
 
+export interface ConsequentialLearnerMemory {
+  id: string
+  kind: 'artifact' | 'guidance' | 'escalation' | 'decision' | 'milestone'
+  summary: string
+  sourceMissionId?: string
+  timestamp: string
+}
+
+export interface EvaluationProvenanceRecord {
+  id: string
+  evaluationId: string
+  implementationId: string
+  coachId?: string
+  courseId: string
+  missionId: string
+  criteriaSetId: string
+  criteriaVersion: string
+  criterionResults: CriterionResult[]
+  policyVerdict: PolicyVerdict
+  confidence?: number
+  evidenceHash: string
+  submissionId?: string
+  timestamp: string
+  missingRequirements?: string[]
+  qualitySignals?: QualitySignalResult[]
+  evaluation?: StructuredEvidenceEvaluation
+  methodologyId?: string
+  methodologyVersion?: string
+  methodologyHash?: string
+}
+
 export interface ImplementationState {
   id: string
   userId?: string
@@ -146,6 +207,12 @@ export interface ImplementationState {
   activeMissionId?: string
   artifacts?: Record<string, ImplementationArtifact>
   learnerSetup?: LearnerSetup
+  consequentialMemory?: ConsequentialLearnerMemory[]
+  evaluationProvenance?: EvaluationProvenanceRecord[]
+  methodologyId?: string
+  methodologyVersion?: string
+  methodologyHash?: string
+  workflowDecisions?: Record<string, PolicyVerdict>
   createdAt: string
   updatedAt: string
 }
@@ -176,14 +243,28 @@ export interface CalibrationExample {
 
 export interface CreatorCalibration {
   missionId: string
+  courseId?: string
   userId?: string
+  coachId?: string
+  version?: string
   initialStandard: string
   examples: CalibrationExample[]
   proposedRubric?: Rubric
-  status: 'draft' | 'proposed' | 'confirmed'
+  activeRubric?: Rubric
+  status: 'draft' | 'proposed' | 'confirmed' | 'active' | 'archived'
   confirmedAt?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface ArtifactProductionSpec {
+  key: string
+  build: {
+    evidenceField: string
+    variant?: string
+    linkedConsumed?: { property: string; key: string }
+  }
+  displayLabel?: string
 }
 
 export interface Mission {
@@ -202,6 +283,7 @@ export interface Mission {
   evidenceCriteria: string
   rubric?: Rubric
   producesArtifacts?: string[]
+  artifactProductions?: ArtifactProductionSpec[]
   consumesArtifacts?: string[]
 }
 

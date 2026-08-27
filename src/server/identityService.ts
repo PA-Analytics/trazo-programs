@@ -1,4 +1,4 @@
-import { course } from '../data/course.ts'
+import { DEFAULT_PACK_ID, resolvePack } from '../data/packs/index.ts'
 import type { CalibrationMode, CoachSetup, UserProfile, UserProfileSummary, UserRole, CoachSubmissionType } from '../domain/identity.ts'
 import type { IProfileRepository } from './types.ts'
 import type { ImplementationService } from './service.ts'
@@ -38,13 +38,17 @@ function normalizeUserId(value: unknown) {
 export class IdentityService {
   private readonly profiles: IProfileRepository
   private readonly implementations: ImplementationService
+  private readonly defaultCourseId: string
 
   constructor(
     profiles: IProfileRepository,
     implementations: ImplementationService,
+    defaultCourseId: string = DEFAULT_PACK_ID,
   ) {
     this.profiles = profiles
     this.implementations = implementations
+    resolvePack(defaultCourseId)
+    this.defaultCourseId = defaultCourseId
   }
 
   async getProfile(userId: string) {
@@ -86,7 +90,7 @@ export class IdentityService {
       const implementation = await this.implementations.createImplementation({
         id: `learner-${profile.userId}`,
         userId: profile.userId,
-        courseId: course.id,
+        courseId: this.defaultCourseId,
         courseVersion: '1.0.0',
       })
       profile.learnerImplementationId = implementation.id

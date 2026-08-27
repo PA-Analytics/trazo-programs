@@ -44,6 +44,26 @@ function proposalTurn(proposal: NextActionProposal): NextActionTurn | null {
     : null
 }
 
+// Cost guard for automatic next-action fetching. Scoped at module level (not per
+// component instance) so React StrictMode double-mounts and parent remounts cannot
+// reset it: after one failed automatic request the gate is held until the learner
+// explicitly retries, and while a request is in flight no other instance refires.
+interface CompanionAutoFetchGate {
+  inFlight: boolean
+  held: boolean
+}
+
+const autoFetchGates = new Map<string, CompanionAutoFetchGate>()
+
+function autoFetchGateFor(key: string): CompanionAutoFetchGate {
+  let gate = autoFetchGates.get(key)
+  if (!gate) {
+    gate = { inFlight: false, held: false }
+    autoFetchGates.set(key, gate)
+  }
+  return gate
+}
+
 export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>(
   function CompanionAvatar(
     {
@@ -81,8 +101,13 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
     const [decisionTurns, setDecisionTurns] = useState<NextActionTurn[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [isStarting, setIsStarting] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(
+      autoFetchGateFor(`${userId}:${implementationId}`).held
+        ? 'Ahora no pude mirar las rutas. Intenta otra vez.'
+        : null,
+    )
     const requestControllerRef = useRef<AbortController | null>(null)
+    const autoFetchGateKey = `${userId}:${implementationId}`
 
     // Sincronizar proposalOverride si se pasa externamente
     useEffect(() => {
@@ -139,6 +164,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
         requestControllerRef.current?.abort()
         const controller = new AbortController()
         requestControllerRef.current = controller
+        const gate = autoFetchGateFor(autoFetchGateKey)
+        gate.inFlight = true
         setIsLoading(true)
         setError(null)
 
@@ -161,6 +188,10 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
           const nextProposal: NextActionProposal = await response.json()
           if (controller.signal.aborted) return
 
+          gate.inFlight = false
+          gate.held = false
+
+          setError(null)
           setProposal(nextProposal)
           onRecommendationChange(
             nextProposal.type === 'RECOMMEND_MISSION' ? nextProposal.missionId : null,
@@ -177,20 +208,29 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
           setClarificationAnswer('')
         } catch {
           if (controller.signal.aborted) return
+          gate.inFlight = false
+          gate.held = true
           setError('Ahora no pude mirar las rutas. Intenta otra vez.')
           onRecommendationChange(null)
         } finally {
           if (!controller.signal.aborted) setIsLoading(false)
         }
       },
-    [implementationId, onRecommendationChange, userId],
+    [autoFetchGateKey, implementationId, onRecommendationChange, userId],
     )
 
     useEffect(() => {
-      if (availableMissions.length > 1 && !proposal && !isLoading) {
+      const gate = autoFetchGateFor(autoFetchGateKey)
+      if (
+        availableMissions.length > 1 &&
+        !proposal &&
+        !isLoading &&
+        !gate.held &&
+        !gate.inFlight
+      ) {
         void fetchNextAction()
       }
-    }, [availableMissions.length, fetchNextAction, isLoading, proposal])
+    }, [availableMissions.length, autoFetchGateKey, fetchNextAction, isLoading, proposal])
 
     // Modo TRAZO / Verificación
     useEffect(() => {
@@ -275,7 +315,15 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
         }
       } else {
         setTapCount(1)
-        setIsOpen((prev) => !prev)
+        setIsOpen((prev) => {
+          if (!prev) {
+            const gate = autoFetchGateFor(autoFetchGateKey)
+            if (gate.held) {
+              setError('Ahora no pude mirar las rutas. Intenta otra vez.')
+            }
+          }
+          return !prev
+        })
       }
     }
 
@@ -439,7 +487,10 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
                   <button
                     type="button"
                     className="trazo-panel-retry"
-                    onClick={() => void fetchNextAction(undefined, decisionTurns)}
+                    onClick={() => {
+                      autoFetchGateFor(autoFetchGateKey).held = false
+                      void fetchNextAction(undefined, decisionTurns)
+                    }}
                   >
                     Reintentar
                   </button>

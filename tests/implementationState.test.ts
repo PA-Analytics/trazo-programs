@@ -9,12 +9,36 @@ import {
 import { ImplementationService } from '../src/server/service.ts'
 import { course } from '../src/data/course.ts'
 import { deriveMissionProgress } from '../src/domain/progression.ts'
-import type { ImplementationState } from '../src/domain/course.ts'
+import type { ImplementationState, Rubric, StructuredEvidenceEvaluation } from '../src/domain/course.ts'
+import type { IEvidenceInterpreter } from '../src/server/evaluator/types.ts'
+import { EvidenceEvaluatorService } from '../src/server/evaluator/evaluatorService.ts'
+
+function stubPassEvaluation(rubric?: Rubric): StructuredEvidenceEvaluation {
+  return {
+    interactionType: 'EVIDENCE_SUBMISSION',
+    message: 'verificado',
+    coachingFeedback: 'verificado',
+    criteria: (rubric?.criteria ?? []).map((criterion) => ({
+      criterionId: criterion.id,
+      status: 'PASS' as const,
+      rationale: 'cumple',
+    })),
+  }
+}
+
+const stubPassEvaluator = new EvidenceEvaluatorService({
+  async interpret(params: Parameters<IEvidenceInterpreter['interpret']>[0]) {
+    return stubPassEvaluation(params.rubric ?? params.mission.rubric)
+  },
+})
 
 function createTestServer(options: { enableDevRoutes?: boolean } = { enableDevRoutes: true }) {
   const repository = new MemoryImplementationRepository()
   const service = new ImplementationService(repository)
-  const requestListener = createRequestListener(service, options)
+  const requestListener = createRequestListener(service, {
+    ...options,
+    evaluatorService: stubPassEvaluator,
+  })
   const server = http.createServer(requestListener)
   return { server, service, repository }
 }
@@ -30,7 +54,7 @@ async function request(
       `http://localhost:${port}${path}`,
       {
         method: options.method || 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-trazo-mode': 'creator' },
       },
       (res) => {
         let raw = ''
@@ -95,27 +119,29 @@ test('2. Idempotency: Repeated completion requests do not corrupt state or alter
     })
     const impl = createRes.data as ImplementationState
 
-    // First completion of N01
-    const firstRes = await request(server, `/api/v1/implementations/${impl.id}/dev-complete-mission`, {
+    // First verified completion of N01 (artifact-producing missions require submission)
+    const firstRes = await request(server, `/api/v1/implementations/${impl.id}/submissions`, {
       method: 'POST',
-      body: { missionId: 'N01' },
+      body: { missionId: 'N01', evidence: { type: 'text', text: 'premise inicial' } },
     })
     assert.equal(firstRes.status, 200)
     const firstState = firstRes.data as ImplementationState
-    assert.deepEqual(firstState.completedMissionIds, ['N01'])
-    const initialUpdatedAt = firstState.updatedAt
+    assert.equal(firstState.completed, true)
+    assert.deepEqual(firstState.state.completedMissionIds, ['N01'])
+    const initialUpdatedAt = firstState.state.updatedAt
 
     // Second completion of N01 (idempotent repeat)
-    const secondRes = await request(server, `/api/v1/implementations/${impl.id}/dev-complete-mission`, {
+    const secondRes = await request(server, `/api/v1/implementations/${impl.id}/submissions`, {
       method: 'POST',
-      body: { missionId: 'N01' },
+      body: { missionId: 'N01', evidence: { type: 'text', text: 'premise repetida' } },
     })
     assert.equal(secondRes.status, 200)
     const secondState = secondRes.data as ImplementationState
 
     // State, completed array, and timestamp remain strictly identical
-    assert.deepEqual(secondState.completedMissionIds, ['N01'])
-    assert.equal(secondState.updatedAt, initialUpdatedAt)
+    assert.equal(secondState.completed, true)
+    assert.deepEqual(secondState.state.completedMissionIds, ['N01'])
+    assert.equal(secondState.state.updatedAt, initialUpdatedAt)
   } finally {
     server.close()
   }
@@ -157,12 +183,12 @@ test('5. Active Mission: Completing N01 unlocks N02 and N03 without arbitrarily 
     })
     const impl = createRes.data as ImplementationState
 
-    const completeRes = await request(server, `/api/v1/implementations/${impl.id}/dev-complete-mission`, {
+    const completeRes = await request(server, `/api/v1/implementations/${impl.id}/submissions`, {
       method: 'POST',
-      body: { missionId: 'N01' },
+      body: { missionId: 'N01', evidence: { type: 'text', text: 'premise para desbloqueo' } },
     })
     assert.equal(completeRes.status, 200)
-    const updatedState = completeRes.data as ImplementationState
+    const updatedState = (completeRes.data as ImplementationState & { state: ImplementationState }).state
 
     // Invariant: activeMissionId is not set to N02
     assert.equal(updatedState.activeMissionId, undefined)

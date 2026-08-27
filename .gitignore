@@ -6,4 +6,7 @@ dist/
 *.tsbuildinfo
 .vite/
 .data/
-
+.playwright-cli/
+output/
+test-results/
+tmp/

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { UserProfile } from '../domain/identity'
 import type { CalibrationMode, CoachSubmissionType } from '../domain/identity'
+import { ProductRouteFrame } from './ProductRouteFrame'
 
 interface CoachIntroProps {
   profile: UserProfile
@@ -53,42 +54,63 @@ export function CoachIntro({ profile, onComplete }: CoachIntroProps) {
   }
 
   return (
-    <main className="coach-entry-shell" aria-labelledby="coach-entry-title">
+    <ProductRouteFrame
+      variant="calibration"
+      stages={[
+        { label: 'Resultado', state: 'current' },
+        { label: 'Evidencia', state: 'future' },
+        { label: 'Criterio', state: 'future' },
+        { label: 'Juicio', state: 'future' },
+      ]}
+    >
       <header className="coach-entry-header">
         <span className="setup-eyebrow">TRAZO · MODO COACH</span>
-        <h1 id="coach-entry-title">Enséñale a TRAZO cómo evalúas.</h1>
-        <p>Los alumnos hacen el trabajo. Tú defines qué cuenta como buen trabajo.</p>
+        <h1 id="coach-entry-title">Configura cómo se juzga el trabajo.</h1>
+        <p>Vas a describir el resultado, la evidencia y el criterio antes de juzgar ejemplos reales.</p>
       </header>
-      <section className="coach-context-card" aria-label="Contexto del programa">
-        <label htmlFor="transformation-context">¿Qué estás ayudando a conseguir?</label>
-        <textarea id="transformation-context" rows={3} value={transformationContext} onChange={(event) => setTransformationContext(event.target.value)} placeholder="Por ejemplo: ayudar a freelancers a conseguir su primer cliente digital." />
-        <fieldset>
-          <legend>¿Qué suelen entregar tus alumnos?</legend>
-          <div className="coach-chip-list">
-            {submissionOptions.map((option) => (
-              <label className="coach-chip" data-selected={submissionTypes.includes(option.value)} key={option.value}>
-                <input type="checkbox" checked={submissionTypes.includes(option.value)} onChange={() => toggleSubmissionType(option.value)} />
-                {option.label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>¿Cómo quieres enseñarle tus criterios?</legend>
-          <div className="coach-mode-list">
-            {modeOptions.map((option) => (
-              <label className="coach-mode" data-selected={calibrationMode === option.value} key={option.value}>
-                <input type="radio" name="calibration-mode" checked={calibrationMode === option.value} onChange={() => setCalibrationMode(option.value)} />
-                <span><strong>{option.label}</strong><small>{option.detail}</small></span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+      <section className="coach-system" aria-labelledby="coach-entry-title">
+        <section className="coach-system__step" data-step="01">
+          <header><span>01</span><div><h2>Resultado</h2><p>¿Qué están intentando conseguir tus alumnos?</p></div></header>
+          <label htmlFor="transformation-context">Transformación que guías</label>
+          <textarea id="transformation-context" rows={3} value={transformationContext} onChange={(event) => setTransformationContext(event.target.value)} placeholder="Por ejemplo: ayudar a freelancers a conseguir su primer cliente digital." />
+        </section>
+        <section className="coach-system__step" data-step="02">
+          <header><span>02</span><div><h2>Evidencia</h2><p>¿Qué entregan para demostrar ese avance?</p></div></header>
+          <fieldset>
+            <legend className="visually-hidden">Tipos de evidencia que entregan los alumnos</legend>
+            <div className="coach-chip-list">
+              {submissionOptions.map((option) => (
+                <label className="coach-chip" data-selected={submissionTypes.includes(option.value)} key={option.value}>
+                  <input type="checkbox" checked={submissionTypes.includes(option.value)} onChange={() => toggleSubmissionType(option.value)} />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </section>
+        <section className="coach-system__step" data-step="03">
+          <header><span>03</span><div><h2>Criterio</h2><p>¿Cómo quieres enseñarle el estándar que aplicas?</p></div></header>
+          <fieldset>
+            <legend className="visually-hidden">Fuente para enseñar criterios</legend>
+            <div className="coach-mode-list">
+              {modeOptions.map((option) => (
+                <label className="coach-mode" data-selected={calibrationMode === option.value} key={option.value}>
+                  <input type="radio" name="calibration-mode" checked={calibrationMode === option.value} onChange={() => setCalibrationMode(option.value)} />
+                  <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </section>
+        <aside className="coach-system__judgment" aria-label="Siguiente etapa de calibración">
+          <span>04</span>
+          <div><strong>Juicio del creador</strong><p>Después marcarás ejemplos como PASS, REWORK o CLARIFY y explicarás por qué. Los casos generados siguen siendo hipótesis hasta tu juicio.</p></div>
+        </aside>
         {error && <p className="setup-error" role="alert">{error}</p>}
-        <button type="button" className="setup-primary" disabled={!transformationContext.trim() || submissionTypes.length === 0 || isSaving} onClick={() => void submit()}>
+        <button type="button" className="setup-primary coach-system__submit" disabled={!transformationContext.trim() || submissionTypes.length === 0 || isSaving} onClick={() => void submit()}>
           {isSaving ? 'Guardando…' : 'Ir a calibración →'}
         </button>
       </section>
-    </main>
+    </ProductRouteFrame>
   )
 }

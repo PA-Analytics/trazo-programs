@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { UserProfile, UserRole } from '../domain/identity'
+import { ProductRouteFrame } from './ProductRouteFrame'
 
 interface RoleGatewayProps {
   profile: UserProfile
@@ -29,25 +30,38 @@ export function RoleGateway({ profile, onComplete }: RoleGatewayProps) {
   }
 
   return (
-    <main className="entry-shell" aria-labelledby="role-title">
-      <div className="entry-card entry-card--wide">
-        <span className="setup-eyebrow">TRAZO · {profile.displayName}</span>
-        <h1 id="role-title">¿Cómo vas a usar TRAZO?</h1>
-        <p>Elige el recorrido que corresponde a lo que vienes a hacer.</p>
-        <div className="role-choice-list">
-          <button type="button" className="role-choice" disabled={Boolean(isSaving)} onClick={() => void choose('learner')}>
-            <span className="role-choice__index">01</span>
-            <span><strong>Estoy tomando el programa</strong><small>Quiero avanzar por misiones y entregar trabajo real.</small></span>
+    <ProductRouteFrame
+      variant="branch"
+      stages={[
+        { label: 'Identidad', state: 'complete' },
+        { label: 'Elige tu ruta', state: 'current' },
+        { label: 'Implementación', state: 'future' },
+      ]}
+    >
+      <section className="role-branch" aria-labelledby="role-title">
+        <header className="role-branch__header">
+          <span className="setup-eyebrow">TRAZO · {profile.displayName}</span>
+          <h1 id="role-title">Elige tu ruta.</h1>
+          <p>Las dos parten de la misma metodología, pero cambian lo que haces dentro del sistema.</p>
+        </header>
+        <div className="role-branch__origin">
+          <span aria-hidden="true">01</span>
+          <div><strong>Identidad</strong><small>{profile.displayName}</small></div>
+        </div>
+        <div className="role-choice-list" role="group" aria-label="Rutas disponibles">
+          <button type="button" className="role-choice" data-route="learner" disabled={Boolean(isSaving)} onClick={() => void choose('learner')}>
+            <span className="role-choice__index">02A</span>
+            <span><strong>Alumno</strong><small>Ejecuta misiones, entrega trabajo real y avanza al verificarlo.</small></span>
             <span aria-hidden="true">→</span>
           </button>
-          <button type="button" className="role-choice" disabled={Boolean(isSaving)} onClick={() => void choose('coach')}>
-            <span className="role-choice__index">02</span>
-            <span><strong>Estoy guiando el programa</strong><small>Quiero enseñarle a TRAZO qué cuenta como buen trabajo.</small></span>
+          <button type="button" className="role-choice" data-route="coach" disabled={Boolean(isSaving)} onClick={() => void choose('coach')}>
+            <span className="role-choice__index">02B</span>
+            <span><strong>Coach</strong><small>Define qué cuenta como buen trabajo y calibra su evaluación.</small></span>
             <span aria-hidden="true">→</span>
           </button>
         </div>
         {error && <p className="setup-error" role="alert">{error}</p>}
-      </div>
-    </main>
+      </section>
+    </ProductRouteFrame>
   )
 }

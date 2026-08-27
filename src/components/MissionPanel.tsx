@@ -4,7 +4,6 @@ import type {
   Mission,
   MissionEvaluationState,
   MissionInteractionTurn,
-  PremiseArtifactValue,
   ProgressState,
 } from '../domain/course'
 import { nodeTypeLabels, progressLabels } from '../presentation/labels'
@@ -21,6 +20,7 @@ interface MissionPanelProps {
   interactionHistory: MissionInteractionTurn[]
   evaluationState?: MissionEvaluationState
   artifacts?: Record<string, ImplementationArtifact>
+  artifactLabels?: Record<string, string>
   onClose: () => void
   onEvidenceChange: (missionId: string, evidence: string) => void
   onSubmitEvidence: (missionId: string) => void
@@ -36,6 +36,7 @@ export function MissionPanel({
   interactionHistory,
   evaluationState,
   artifacts,
+  artifactLabels,
   onClose,
   onEvidenceChange,
   onSubmitEvidence,
@@ -134,11 +135,21 @@ export function MissionPanel({
     if (progressState === 'completed') completionNoteRef.current?.focus()
   }, [progressState])
 
-  const premiseArtifact = artifacts?.['premise']
-  const premiseStatement = (premiseArtifact?.value as PremiseArtifactValue)?.statement
   const rubricLabelById = new Map(
     mission.rubric?.criteria.map((criterion) => [criterion.id, criterion.label]),
   )
+  const consumedArtifacts = (mission.consumesArtifacts ?? [])
+    .map((key) => ({ key, artifact: artifacts?.[key] }))
+    .filter((entry) => Boolean(entry.artifact))
+  const producedSections = (mission.artifactProductions ?? [])
+    .filter((spec) => artifacts?.[spec.key] && evaluationPresentation.state === 'verified')
+    .map((spec) => {
+      const value = artifacts![spec.key].value as Record<string, unknown>
+      const quote = typeof value[spec.build.evidenceField] === 'string'
+        ? (value[spec.build.evidenceField] as string)
+        : undefined
+      return { key: spec.key, label: spec.displayLabel ?? 'Artefacto verificado', quote }
+    })
   const historyWithoutCurrentReply = interactionHistory.filter(
     (turn, index) =>
       !(
@@ -211,33 +222,43 @@ export function MissionPanel({
       </ol>
 
       {/* Consequential Artifact Consumer Section (TASK-005 & TASK-011) */}
-      {mission.consumesArtifacts?.includes('premise') && (
+      {mission.consumesArtifacts && mission.consumesArtifacts.length > 0 && (
         <section className="mission-prior-artifact" aria-labelledby="prior-artifact-heading">
           <h3 id="prior-artifact-heading" className="visually-hidden">Artefacto de misión previa</h3>
-          {premiseStatement ? (
-            <div className="mission-prior-artifact__card">
-              <div className="mission-prior-artifact__header">
-                <span className="mission-prior-artifact__eyebrow">Construyes desde</span>
-                <strong className="mission-prior-artifact__verified-title"><span aria-hidden="true">✓</span> Premisa verificada</strong>
-                <span className="mission-prior-artifact__badge">Trabajo verificado de N01</span>
-                <strong>Partimos de tu premisa verificada:</strong>
-              </div>
-              <blockquote className="mission-prior-artifact__quote">
-                "{premiseStatement}"
-              </blockquote>
-              <p className="mission-prior-artifact__direction">
-                Esta evidencia ya fue validada y define el punto de partida de esta misión.
-              </p>
-              <p className="mission-prior-artifact__hint">
-                {mission.id === 'N02'
-                  ? 'Convierte esta premisa en una estructura directa de apertura, desarrollo y cierre.'
-                  : 'Desarrolla esta premisa en una estructura narrativa con situación inicial, cambio y resolución.'}
-              </p>
-            </div>
+          {consumedArtifacts.length > 0 ? (
+            consumedArtifacts.map(({ key, artifact }) => {
+              const quote = artifact?.value as Record<string, unknown> | undefined
+              const statement = Object.values(quote ?? {}).find((entry) => typeof entry === 'string')
+              return (
+                <div className="mission-prior-artifact__card" key={key}>
+                  <div className="mission-prior-artifact__header">
+                    <span className="mission-prior-artifact__eyebrow">Construyes desde</span>
+                    <strong className="mission-prior-artifact__verified-title">
+                      <span aria-hidden="true">✓</span> {artifactLabels?.[key] ?? 'Trabajo verificado'}
+                    </strong>
+                    {artifact?.sourceMissionId && (
+                      <span className="mission-prior-artifact__badge">
+                        Trabajo verificado de {artifact.sourceMissionId}
+                      </span>
+                    )}
+                    <strong>
+                      Partimos de tu{' '}
+                      {(artifactLabels?.[key] ?? 'trabajo previo').toLocaleLowerCase('es-MX')}:
+                    </strong>
+                  </div>
+                  {typeof statement === 'string' && (
+                    <blockquote className="mission-prior-artifact__quote">"{statement}"</blockquote>
+                  )}
+                  <p className="mission-prior-artifact__direction">
+                    Esta evidencia ya fue validada y define el punto de partida de esta misión.
+                  </p>
+                </div>
+              )
+            })
           ) : (
             <div className="mission-prior-artifact__missing" role="alert">
               <span>⚠️</span>
-              <p>No se encontró la premisa verificada de la misión anterior.</p>
+              <p>Todavía no está disponible el trabajo verificado que esta misión necesita.</p>
             </div>
           )}
         </section>
@@ -389,22 +410,23 @@ export function MissionPanel({
         </section>
       )}
 
-      {evaluationPresentation.state === 'verified' &&
-        artifacts?.premise &&
-        mission.producesArtifacts?.includes('premise') && (
-          <section
-            className="mission-prior-artifact mission-produced-artifact"
-            aria-labelledby="produced-artifact-heading"
-          >
-            <h3 id="produced-artifact-heading">Progreso guardado</h3>
-            <p>Esta evidencia creó una premisa verificada para las siguientes misiones.</p>
-            {typeof (artifacts.premise.value as PremiseArtifactValue)?.statement === 'string' && (
-              <blockquote className="mission-prior-artifact__quote">
-                "{(artifacts.premise.value as PremiseArtifactValue).statement}"
-              </blockquote>
-            )}
-          </section>
-        )}
+      {producedSections.length > 0 && (
+        <section
+          className="mission-prior-artifact mission-produced-artifact"
+          aria-labelledby="produced-artifact-heading"
+        >
+          <h3 id="produced-artifact-heading">Progreso guardado</h3>
+          <p>Esta evidencia creó trabajo verificado para las siguientes misiones.</p>
+          {producedSections.map((section) => (
+            <div key={section.key}>
+              <strong>{section.label}</strong>
+              {section.quote && (
+                <blockquote className="mission-prior-artifact__quote">"{section.quote}"</blockquote>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       <div className="mission-panel__action">
         {progressState === 'locked' && (

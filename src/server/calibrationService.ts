@@ -1,8 +1,9 @@
-import { course } from '../data/course.ts'
+import { findMissionOwner, type MethodologyPack } from '../data/packs/index.ts'
 import type {
   CalibrationCaseQuality,
   CalibrationExample,
   CreatorCalibration,
+  Mission,
   Rubric,
 } from '../domain/course.ts'
 import type {
@@ -15,10 +16,24 @@ import type {
 
 const MAX_TEXT = 4000
 
-function missionById(missionId: string) {
-  const mission = course.chapters.flatMap((chapter) => chapter.missions).find((item) => item.id === missionId)
-  if (!mission) throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
-  return mission
+interface MissionScope {
+  pack: MethodologyPack
+  mission: Mission
+}
+
+/**
+ * Resolves a mission together with its owning methodology pack.
+ * Throws when the mission does not exist or its id is ambiguous across packs.
+ */
+function resolveMissionScope(missionId: string): MissionScope {
+  const owner = findMissionOwner(missionId)
+  if (!owner) {
+    throw new Error(`Mission '${missionId}' not found in any registered methodology`)
+  }
+  const mission = owner.chapters
+    .flatMap((chapter) => chapter.missions)
+    .find((item) => item.id === missionId)!
+  return { pack: owner, mission }
 }
 
 function now() {
@@ -31,15 +46,19 @@ function normalizeText(value: unknown, field: string) {
   return text.slice(0, MAX_TEXT)
 }
 
-function generatedSubmission(missionTitle: string, quality: CalibrationCaseQuality) {
-  const title = missionTitle.toLocaleLowerCase('es-MX')
+/**
+ * Neutral calibration examples built from mission data only.
+ * Methodology-specific example copy is not allowed: calibration must work
+ * identically for any methodology pack.
+ */
+function generatedSubmission(mission: Mission, quality: CalibrationCaseQuality) {
   if (quality === 'clear_pass') {
-    return `Para freelancers que ya tienen reuniones pero no cierran clientes, ${title} debe mostrar una idea concreta, una audiencia reconocible y un siguiente paso claro.`
+    return `Trabajo de ejemplo para ${mission.title}: cumple directamente lo que pide la misión (${mission.evidencePrompt}) sin información de más.`
   }
   if (quality === 'clear_rework') {
-    return `Una idea para mejorar el contenido de todo el mundo.`
+    return `Una idea general para mejorar, todavía sin concretar.`
   }
-  return `Ayudo a freelancers a mejorar sus propuestas para conseguir más clientes.`
+  return `Avance parcial sobre ${mission.title.toLocaleLowerCase('es-MX')}: falta definir un detalle antes de estar completo.`
 }
 
 function splitStandardCriteria(text: string) {
@@ -50,8 +69,7 @@ function splitStandardCriteria(text: string) {
     .slice(0, 6)
 }
 
-function buildProposal(calibration: CreatorCalibration, missionId: string): Rubric {
-  const mission = missionById(missionId)
+function buildProposal(calibration: CreatorCalibration, mission: Mission): Rubric {
   const judged = calibration.examples.filter((example) => example.verdict && example.reason)
   if (judged.length === 0) throw new Error('Judge at least one example before proposing criteria')
 
@@ -61,7 +79,7 @@ function buildProposal(calibration: CreatorCalibration, missionId: string): Rubr
     : mission.rubric?.criteria.map((criterion) => criterion.description) ?? [mission.evidenceCriteria]
 
   return {
-    id: `calibration-${missionId}`,
+    id: `calibration-${mission.id}`,
     version: '0.1.0',
     criteria: labels.map((description, index) => ({
       id: `cal_${index + 1}`,
@@ -79,6 +97,49 @@ function getCalibrationOrThrow(value: CreatorCalibration | null): CreatorCalibra
   return value
 }
 
+export function validateCriteriaStructure(rubric: Rubric, mission?: Mission): void {
+  if (!rubric.criteria || rubric.criteria.length === 0) {
+    throw new Error('Criteria set must contain at least one criterion')
+  }
+
+  const seenIds = new Set<string>()
+  let hasRequired = false
+
+  for (let i = 0; i < rubric.criteria.length; i++) {
+    const criterion = rubric.criteria[i]
+    if (!criterion.id || !criterion.id.trim()) {
+      throw new Error(`Criterion at index ${i} has an empty id`)
+    }
+    if (seenIds.has(criterion.id)) {
+      throw new Error(`Duplicate criterion id '${criterion.id}'`)
+    }
+    seenIds.add(criterion.id)
+
+    if (!criterion.description || !criterion.description.trim()) {
+      throw new Error(`Criterion '${criterion.id}' has an empty description`)
+    }
+
+    if (criterion.isRequired) {
+      hasRequired = true
+    }
+  }
+
+  if (!hasRequired) {
+    throw new Error('Criteria set must have at least one required criterion')
+  }
+
+  // Hard requirement preservation guard: if mission has base hard criteria, coach cannot erase them
+  if (mission?.rubric?.criteria) {
+    const baseRequired = mission.rubric.criteria.filter((c) => c.isRequired)
+    const requiredCount = rubric.criteria.filter((criterion) => criterion.isRequired).length
+    if (requiredCount < baseRequired.length) {
+      throw new Error(
+        `Cannot confirm criteria: mission hard requirements cannot be erased; at least ${baseRequired.length} required criteria are needed`,
+      )
+    }
+  }
+}
+
 export class CalibrationService {
   private readonly repository: ICalibrationRepository
 
@@ -86,19 +147,33 @@ export class CalibrationService {
     this.repository = repository
   }
 
-  async get(missionId: string, userId?: string) {
-    missionById(missionId)
-    return this.repository.getByMissionId(missionId, userId)
+  async get(
+    missionId: string,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+    version?: string,
+  ) {
+    const pack = courseId ? { id: courseId } : resolveMissionScope(missionId).pack
+    return this.repository.getByMissionId(missionId, userId, pack.id, coachId, version)
   }
 
-  async create(missionId: string, dto: CreateCalibrationDTO, userId?: string) {
-    missionById(missionId)
-    const existing = await this.repository.getByMissionId(missionId, userId)
+  async create(
+    missionId: string,
+    dto: CreateCalibrationDTO,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const pack = courseId ? { id: courseId } : resolveMissionScope(missionId).pack
+    const existing = await this.repository.getByMissionId(missionId, userId, pack.id, coachId)
     if (existing) return existing
     const timestamp = now()
     const calibration: CreatorCalibration = {
       missionId,
+      courseId: pack.id,
       ...(userId ? { userId } : {}),
+      ...(coachId ? { coachId } : {}),
       initialStandard: normalizeText(dto.initialStandard, 'initialStandard'),
       examples: [],
       status: 'draft',
@@ -109,8 +184,17 @@ export class CalibrationService {
     return calibration
   }
 
-  async addExample(missionId: string, dto: AddCalibrationExampleDTO, userId?: string) {
-    const calibration = getCalibrationOrThrow(await this.repository.getByMissionId(missionId, userId))
+  async addExample(
+    missionId: string,
+    dto: AddCalibrationExampleDTO,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const pack = courseId ? { id: courseId } : resolveMissionScope(missionId).pack
+    const calibration = getCalibrationOrThrow(
+      await this.repository.getByMissionId(missionId, userId, pack.id, coachId),
+    )
     const submission = normalizeText(dto.submission, 'submission')
     if (dto.source !== 'creator' && dto.source !== 'generated') throw new Error('Invalid example source')
     const example: CalibrationExample = {
@@ -125,16 +209,24 @@ export class CalibrationService {
     return calibration
   }
 
-  async generateExamples(missionId: string, userId?: string) {
-    const calibration = getCalibrationOrThrow(await this.repository.getByMissionId(missionId, userId))
-    const mission = missionById(missionId)
+  async generateExamples(
+    missionId: string,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const { pack, mission } = resolveMissionScope(missionId)
+    const effectiveCourseId = courseId || pack.id
+    const calibration = getCalibrationOrThrow(
+      await this.repository.getByMissionId(missionId, userId, effectiveCourseId, coachId),
+    )
     const qualities: CalibrationCaseQuality[] = ['clear_pass', 'clear_rework', 'borderline']
     for (const caseQuality of qualities) {
       calibration.examples.push({
         id: `generated-${caseQuality}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         source: 'generated',
         caseQuality,
-        submission: generatedSubmission(mission.title, caseQuality),
+        submission: generatedSubmission(mission, caseQuality),
       })
     }
     calibration.updatedAt = now()
@@ -142,8 +234,18 @@ export class CalibrationService {
     return calibration
   }
 
-  async judgeExample(missionId: string, exampleId: string, dto: JudgeCalibrationExampleDTO, userId?: string) {
-    const calibration = getCalibrationOrThrow(await this.repository.getByMissionId(missionId, userId))
+  async judgeExample(
+    missionId: string,
+    exampleId: string,
+    dto: JudgeCalibrationExampleDTO,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const pack = courseId ? { id: courseId } : resolveMissionScope(missionId).pack
+    const calibration = getCalibrationOrThrow(
+      await this.repository.getByMissionId(missionId, userId, pack.id, coachId),
+    )
     const example = calibration.examples.find((item) => item.id === exampleId)
     if (!example) throw new Error(`Calibration example '${exampleId}' not found`)
     if (!['PASS', 'REWORK', 'CLARIFY'].includes(dto.verdict)) throw new Error('Invalid calibration verdict')
@@ -155,35 +257,90 @@ export class CalibrationService {
     return calibration
   }
 
-  async propose(missionId: string, userId?: string) {
-    const calibration = getCalibrationOrThrow(await this.repository.getByMissionId(missionId, userId))
-    calibration.proposedRubric = buildProposal(calibration, missionId)
+  async propose(
+    missionId: string,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const { pack, mission } = resolveMissionScope(missionId)
+    const effectiveCourseId = courseId || pack.id
+    const calibration = getCalibrationOrThrow(
+      await this.repository.getByMissionId(missionId, userId, effectiveCourseId, coachId),
+    )
+    calibration.proposedRubric = buildProposal(calibration, mission)
     calibration.status = 'proposed'
     calibration.updatedAt = now()
     await this.repository.save(calibration)
     return calibration
   }
 
-  async confirm(missionId: string, dto: ConfirmCalibrationDTO, userId?: string) {
-    const calibration = getCalibrationOrThrow(await this.repository.getByMissionId(missionId, userId))
+  async confirm(
+    missionId: string,
+    dto: ConfirmCalibrationDTO,
+    userId?: string,
+    coachId?: string,
+    courseId?: string,
+  ) {
+    const { pack, mission } = resolveMissionScope(missionId)
+    const effectiveCourseId = courseId || pack.id
+    const calibration = getCalibrationOrThrow(
+      await this.repository.getByMissionId(missionId, userId, effectiveCourseId, coachId),
+    )
     if (!calibration.proposedRubric) throw new Error('Propose criteria before confirming calibration')
+
     const edited = dto.criteria?.map((criterion) => criterion.trim()).filter(Boolean).slice(0, 8)
+    const newVersion = dto.version || (calibration.version ? incrementVersion(calibration.version) : '1.0.0')
+
+    let finalizedCriteria = calibration.proposedRubric.criteria
     if (edited && edited.length > 0) {
-      calibration.proposedRubric = {
-        ...calibration.proposedRubric,
-        criteria: edited.map((description, index) => ({
-          id: `cal_${index + 1}`,
-          label: description.length > 72 ? `${description.slice(0, 69)}…` : description,
-          description,
-          isRequired: true,
-        })),
-        version: '0.1.1',
-      }
+      finalizedCriteria = edited.map((description, index) => ({
+        id: `cal_${index + 1}`,
+        label: description.length > 72 ? `${description.slice(0, 69)}…` : description,
+        description,
+        isRequired: true,
+        kind: 'hard_requirement' as const,
+      }))
     }
+
+    const qualitySignals = dto.qualitySignals?.map((qs, index) => ({
+      id: qs.id || `qs_${index + 1}`,
+      label: qs.label || qs.description.slice(0, 50),
+      description: qs.description,
+      isRequired: false,
+      kind: 'quality_signal' as const,
+    }))
+
+    const confirmedRubric: Rubric = {
+      ...calibration.proposedRubric,
+      id: `rubric-${coachId ? `${coachId}-` : ''}${effectiveCourseId}-${missionId}`,
+      criteria: finalizedCriteria,
+      qualitySignals,
+      coachId,
+      courseId: effectiveCourseId,
+      missionId,
+      version: newVersion,
+      status: 'active',
+      updatedAt: now(),
+    }
+
+    validateCriteriaStructure(confirmedRubric, mission)
+
+    calibration.proposedRubric = confirmedRubric
+    calibration.activeRubric = confirmedRubric
+    calibration.version = newVersion
     calibration.status = 'confirmed'
     calibration.confirmedAt = now()
     calibration.updatedAt = now()
     await this.repository.save(calibration)
     return calibration
   }
+}
+
+function incrementVersion(version: string): string {
+  const parts = version.split('.').map(Number)
+  if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+    return `${parts[0]}.${parts[1] + 1}.${parts[2]}`
+  }
+  return '1.0.0'
 }

@@ -41,7 +41,7 @@ async function request(
       `http://localhost:${port}${path}`,
       {
         method: options.method || 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-trazo-mode': 'creator' },
       },
       (res) => {
         let raw = ''

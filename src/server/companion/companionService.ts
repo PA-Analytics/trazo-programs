@@ -1,10 +1,13 @@
-import { course } from '../../data/course.ts'
 import type {
   ImplementationState,
   NextActionProposal,
   NextActionTurn,
 } from '../../domain/course.ts'
 import { deriveMissionProgress } from '../../domain/progression.ts'
+import { resolvePack } from '../../data/packs/index.ts'
+import { adaptMethodologyGraphToCourse } from '../../domain/methodologyAdapter.ts'
+import { MethodologyGraphRuntime } from '../../domain/methodologyRuntime.ts'
+import type { MethodologyService } from '../methodologyService.ts'
 import type {
   INextActionProposer,
   NextActionContext,
@@ -14,9 +17,11 @@ import type {
 
 export class CompanionService {
   private proposer: INextActionProposer
+  private readonly methodologyService?: MethodologyService
 
-  constructor(proposer: INextActionProposer) {
+  constructor(proposer: INextActionProposer, methodologyService?: MethodologyService) {
     this.proposer = proposer
+    this.methodologyService = methodologyService
   }
 
   /**
@@ -34,9 +39,16 @@ export class CompanionService {
     onLatencyTrace?: (trace: NextActionLatencyTrace) => void,
     profile?: CompanionProfileContext,
   ): Promise<NextActionProposal> {
-    const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
     const currentCompleted = new Set(state.completedMissionIds)
-    const currentProgress = deriveMissionProgress(allCourseMissions, currentCompleted)
+    const methodology = this.methodologyService
+      ? await this.methodologyService.getForState(state)
+      : undefined
+    const course = methodology ? adaptMethodologyGraphToCourse(methodology) : resolvePack(state.courseId)
+    const runtime = methodology ? new MethodologyGraphRuntime(methodology) : undefined
+    const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
+    const currentProgress = runtime
+      ? runtime.deriveProgress(currentCompleted, state.activeMissionId, state.workflowDecisions)
+      : deriveMissionProgress(allCourseMissions, currentCompleted)
 
     // Allowed available missions
     const availableMissions = allCourseMissions.filter(

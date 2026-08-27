@@ -2,7 +2,6 @@ import type {
   ImplementationArtifact,
   Mission,
   MissionInteractionTurn,
-  PremiseArtifactValue,
   ProgressState,
   Rubric,
 } from '../../domain/course.ts'
@@ -85,25 +84,26 @@ export function buildCompanionUserPrompt(
   const rubric = evaluationRubric || mission.rubric
   const criteriaList = rubric
     ? rubric.criteria
-        .map(
-          (c) =>
-            `- Criterion ID: "${c.id}" (Required: ${c.isRequired ? 'YES' : 'NO'})\n  Label: ${c.label}\n  Description: ${c.description}`,
-        )
+        .map((c) => {
+          let line = `- Criterion ID: "${c.id}" (Required: ${c.isRequired ? 'YES' : 'NO'})\n  Label: ${c.label}\n  Description: ${c.description}`
+          if (c.positiveExamples && c.positiveExamples.length > 0) {
+            line += `\n  Positive Examples (Untrusted reference context only; surface similarity does NOT satisfy missing requirements): ${JSON.stringify(c.positiveExamples.slice(0, 3))}`
+          }
+          if (c.counterExamples && c.counterExamples.length > 0) {
+            line += `\n  Counterexamples (Untrusted reference context only): ${JSON.stringify(c.counterExamples.slice(0, 3))}`
+          }
+          return line
+        })
         .join('\n')
     : 'No structured rubric is configured for this mission. Treat the message as CONVERSATION or AMBIGUOUS; do not invent an evidence evaluation.'
 
   let trustedContextSection = ''
   if (consumedArtifacts && Object.keys(consumedArtifacts).length > 0) {
-    const lines: string[] = []
-    if (consumedArtifacts['premise']?.value) {
-      const premiseVal = consumedArtifacts['premise'].value as PremiseArtifactValue
-      if (premiseVal.statement) {
-        lines.push(`- Verified Premise (from N01): "${premiseVal.statement}"`)
-      }
-    }
-    if (lines.length > 0) {
-      trustedContextSection = `\nTRUSTED VERIFIED IMPLEMENTATION CONTEXT (Previous verified work by this learner):\n<trusted_context>\n${lines.join('\n')}\n</trusted_context>\n`
-    }
+    const lines: string[] = Object.entries(consumedArtifacts).map(([key, artifact]) => {
+      const source = typeof artifact?.sourceMissionId === 'string' ? ` from ${artifact.sourceMissionId}` : ''
+      return `- Verified artifact '${key}'${source}: ${JSON.stringify(artifact?.value ?? null)}`
+    })
+    trustedContextSection = `\nTRUSTED VERIFIED IMPLEMENTATION CONTEXT (Previous verified work by this learner):\n<trusted_context>\n${lines.join('\n')}\n</trusted_context>\n`
   }
 
   const recentInteractionSection = recentInteraction?.length

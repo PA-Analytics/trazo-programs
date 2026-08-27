@@ -9,14 +9,16 @@ import { IdentityEntry } from './components/IdentityEntry'
 import { LearnerQuickSetup } from './components/LearnerQuickSetup'
 import { RoleGateway } from './components/RoleGateway'
 import { ProfileSelection, ProfileSwitcher } from './components/ProfileSwitcher'
-import { course } from './data/course'
+import { DEFAULT_PACK_ID, packs, resolvePack } from './data/packs'
 import type {
   Chapter,
+  Course,
   EvaluationStatus,
   ImplementationState,
   Mission,
   MissionEvaluationState,
   MissionInteractionTurn,
+  ProgressState,
 } from './domain/course'
 import type { UserProfile } from './domain/identity'
 import {
@@ -57,7 +59,30 @@ function getUnlockSummary(mission: Mission, chapter: Chapter) {
     : 'Al verificar, completas este recorrido.'
 }
 
+/**
+ * Dev/demo selection boundary: picks the active methodology pack from an explicit
+ * URL parameter or a persisted local demo preference. Unknown ids fall back to the
+ * default pack with a console warning; canonical state is never fabricated here.
+ */
+function selectDemoPackId(): string {
+  const requested =
+    new URLSearchParams(window.location.search).get('metodologia') ??
+    localStorage.getItem('trazo_active_pack')
+  if (!requested) return DEFAULT_PACK_ID
+  if (!packs.some((pack) => pack.id === requested)) {
+    console.warn(`[TRAZO] Unknown methodology '${requested}' requested; using default pack.`)
+    return DEFAULT_PACK_ID
+  }
+  localStorage.setItem('trazo_active_pack', requested)
+  return requested
+}
+
 export function App() {
+  const [selectedPackId] = useState(() => selectDemoPackId())
+  const staticCourse = useMemo(() => resolvePack(selectedPackId), [selectedPackId])
+  const [graphCourse, setGraphCourse] = useState<Course | null>(null)
+  const [graphProgress, setGraphProgress] = useState<Record<string, ProgressState> | null>(null)
+  const course = graphCourse ?? staticCourse
   const [activeUserId, setActiveUserId] = useState(() => localStorage.getItem('trazo_active_user_id') || '')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(() => Boolean(localStorage.getItem('trazo_active_user_id')))
@@ -115,6 +140,7 @@ export function App() {
     setActiveChapterId(course.chapters[0].id)
     setImplementationId('')
     setImplementationState(null)
+    setGraphCourse(null)
     setSelectedMissionId(null)
     setEvidenceByMissionId({})
     setEvaluationStateByMissionId({})
@@ -165,6 +191,8 @@ export function App() {
     if (!profile || profile.role !== 'learner' || !implementationId) return
     setIsLoading(true)
     setServerError(null)
+    setGraphCourse(null)
+    setGraphProgress(null)
     try {
       const headers = { 'X-Trazo-User-Id': profile.userId }
       let res = await fetch(`/api/v1/implementations/${implementationId}`, { headers })
@@ -174,23 +202,31 @@ export function App() {
           headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({
             id: implementationId,
-            courseId: course.id,
+            courseId: staticCourse.id,
             courseVersion: '1.0.0',
           }),
         })
       }
-
       if (!res.ok) {
         throw new Error(`Error al conectar con el backend (${res.status}): ${res.statusText}`)
       }
       const data: ImplementationState = await res.json()
       setImplementationState(data)
+      const graphResponse = await fetch(`/api/v1/implementations/${encodeURIComponent(implementationId)}/methodology`, { headers })
+      if (graphResponse.ok) {
+        const graphView = await graphResponse.json() as {
+          course?: Course
+          progress?: Record<string, ProgressState>
+        }
+        if (graphView.course) setGraphCourse(graphView.course)
+        if (graphView.progress) setGraphProgress(graphView.progress)
+      }
     } catch {
       setServerError('No se pudo conectar con el estado de aprendizaje. Intenta de nuevo.')
     } finally {
       setIsLoading(false)
     }
-  }, [implementationId, profile])
+  }, [implementationId, profile, staticCourse.id])
 
   useEffect(() => {
     void loadImplementation()
@@ -205,8 +241,8 @@ export function App() {
     course.chapters.find((chapter) => chapter.id === activeChapterId) ?? course.chapters[0]
 
   const progress = useMemo(
-    () => deriveMissionProgress(activeChapter.missions, completedMissionIds),
-    [activeChapter.missions, completedMissionIds],
+    () => graphProgress ?? deriveMissionProgress(activeChapter.missions, completedMissionIds),
+    [activeChapter.missions, completedMissionIds, graphProgress],
   )
 
   const availableMissions = useMemo(
@@ -248,6 +284,16 @@ export function App() {
   const completedCount = Object.values(progress).filter(
     (state) => state === 'completed',
   ).length
+
+  const artifactLabels = useMemo(() => {
+    const labels: Record<string, string> = {}
+    for (const mission of activeChapter.missions) {
+      for (const spec of mission.artifactProductions ?? []) {
+        if (spec.displayLabel) labels[spec.key] = spec.displayLabel
+      }
+    }
+    return labels
+  }, [activeChapter.missions])
 
   const handleChapterSelect = useCallback((chapter: Chapter) => {
     setActiveChapterId(chapter.id)
@@ -496,7 +542,9 @@ export function App() {
   }
 
   if (profile.role === 'coach') {
-    const calibrationMission = course.chapters[0].missions.find((mission) => mission.id === 'N01') ?? course.chapters[0].missions[0]
+    const calibrationMission =
+      course.chapters[0].missions.find((mission) => mission.mapRole === 'entry') ??
+      course.chapters[0].missions[0]
     return withProfileSwitcher(<CreatorCalibrationView userId={profile.userId} initialMode={profile.coachSetup?.calibrationMode} mission={calibrationMission} />)
   }
 
@@ -582,6 +630,7 @@ export function App() {
           interactionHistory={interactionHistoryByMissionId[selectedMission.id] ?? []}
           evaluationState={evaluationStateByMissionId[selectedMission.id]}
           artifacts={implementationState?.artifacts}
+          artifactLabels={artifactLabels}
           onClose={handleClosePanel}
           onEvidenceChange={handleEvidenceChange}
           onSubmitEvidence={handleSubmitEvidence}

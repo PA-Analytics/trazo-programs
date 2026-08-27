@@ -1,7 +1,17 @@
-import { course } from '../data/course.ts'
+import * as crypto from 'node:crypto'
 import { adaptCompanionGuidance } from '../domain/learner.ts'
-import type { ImplementationArtifact, ImplementationState } from '../domain/course.ts'
+import type {
+  ArtifactProductionSpec,
+  EvaluationProvenanceRecord,
+  ImplementationArtifact,
+  ImplementationState,
+  Mission,
+  Rubric,
+} from '../domain/course.ts'
 import { deriveMissionProgress } from '../domain/progression.ts'
+import { DEFAULT_PACK_ID, resolvePack } from '../data/packs/index.ts'
+import { adaptMethodologyGraphToCourse } from '../domain/methodologyAdapter.ts'
+import type { MethodologyGraphRuntime } from '../domain/methodologyRuntime.ts'
 import type { EvidenceEvaluatorService } from './evaluator/evaluatorService.ts'
 import type {
   CreateImplementationDTO,
@@ -13,6 +23,60 @@ import type {
   SubmissionResponseDTO,
   SubmitEvidenceDTO,
 } from './types.ts'
+import type { MethodologyService } from './methodologyService.ts'
+
+export function buildCanonicalArtifactValue(
+  spec: ArtifactProductionSpec,
+  evidenceText: string,
+): Record<string, unknown> {
+  const value: Record<string, unknown> = {}
+  if (spec.build.variant !== undefined) {
+    value.variant = spec.build.variant
+  }
+  value[spec.build.evidenceField] = evidenceText
+  if (spec.build.linkedConsumed) {
+    value[spec.build.linkedConsumed.property] = spec.build.linkedConsumed.key
+  }
+  return value
+}
+
+/**
+ * Resolves the artifact production plan for a mission.
+ * Fails loudly when a mission declares an artifact without a supported declarative spec:
+ * a declared canonical artifact must never silently fail to materialize on PASS.
+ */
+export function resolveArtifactProductions(mission: Mission): ArtifactProductionSpec[] {
+  const specs = mission.artifactProductions ?? []
+  const specKeys = new Set(specs.map((spec) => spec.key))
+  const declared = mission.producesArtifacts ?? []
+  const unsupported = declared.filter((key) => !specKeys.has(key))
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Mission '${mission.id}' declares artifact(s) [${unsupported.join(', ')}] without a supported production spec. Submission rejected before evaluation.`,
+    )
+  }
+
+  const orphanSpecs = specs.filter((spec) => !declared.includes(spec.key))
+  if (orphanSpecs.length > 0) {
+    throw new Error(
+      `Mission '${mission.id}' has production spec(s) [${orphanSpecs.map((s) => s.key).join(', ')}] not declared in producesArtifacts.`,
+    )
+  }
+  return specs
+}
+
+function criteriaFingerprint(rubric: Rubric | undefined): string {
+  const canonical = rubric
+    ? {
+        id: rubric.id,
+        version: rubric.version,
+        criteria: rubric.criteria,
+        qualitySignals: rubric.qualitySignals,
+        systemInstructions: rubric.systemInstructions,
+      }
+    : null
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex')
+}
 
 function normalizeRecentInteraction(value: unknown) {
   if (!Array.isArray(value)) return []
@@ -32,12 +96,47 @@ function normalizeRecentInteraction(value: unknown) {
 }
 
 export class ImplementationService {
-  private repository: IImplementationRepository
+  public repository: IImplementationRepository
   private calibrationRepository?: ICalibrationRepository
+  private methodologyService?: MethodologyService
+  // Per-implementation mutation queues. Every read-modify-write cycle on an
+  // implementation runs inside runExclusive() so a stale request can never save
+  // over canonical state written by a newer request (F1 stale-write protection).
+  private exclusiveQueues = new Map<string, Promise<unknown>>()
 
-  constructor(repository: IImplementationRepository, calibrationRepository?: ICalibrationRepository) {
+  constructor(
+    repository: IImplementationRepository,
+    calibrationRepository?: ICalibrationRepository,
+    methodologyService?: MethodologyService,
+  ) {
     this.repository = repository
     this.calibrationRepository = calibrationRepository
+    this.methodologyService = methodologyService
+  }
+
+  private async getWorkflowContext(state: ImplementationState): Promise<{
+    course: ReturnType<typeof resolvePack>
+    runtime?: MethodologyGraphRuntime
+    methodologyId?: string
+    methodologyVersion?: string
+    methodologyHash?: string
+  }> {
+    if (!this.methodologyService) return { course: resolvePack(state.courseId) }
+    const methodology = await this.methodologyService.getForState(state)
+    return {
+      course: adaptMethodologyGraphToCourse(methodology),
+      runtime: await this.methodologyService.getRuntimeForState(state),
+      methodologyId: methodology.id,
+      methodologyVersion: methodology.version,
+      methodologyHash: methodology.canonicalHash,
+    }
+  }
+
+  runExclusive<T>(implementationId: string, operation: () => Promise<T>): Promise<T> {
+    const prior = (this.exclusiveQueues.get(implementationId) ?? Promise.resolve()).catch(() => {})
+    const result = prior.then(operation)
+    this.exclusiveQueues.set(implementationId, result.catch(() => {}))
+    return result
   }
 
   /**
@@ -55,30 +154,46 @@ export class ImplementationService {
    */
   async createImplementation(dto: CreateImplementationDTO): Promise<ImplementationState> {
     const id = dto.id?.trim() || `impl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const courseId = dto.courseId?.trim() || DEFAULT_PACK_ID
+    if (!this.methodologyService) resolvePack(courseId)
 
-    const existing = await this.repository.getById(id)
-    if (existing) {
-      return existing
-    }
+    return this.runExclusive(id, async () => {
+      const existing = await this.repository.getById(id)
+      if (existing) {
+        return existing
+      }
 
-    const now = new Date().toISOString()
-    const state: ImplementationState = {
-      id,
-      ...(dto.userId ? { userId: dto.userId } : {}),
-      courseId: dto.courseId,
-      courseVersion: dto.courseVersion || '1.0.0',
-      completedMissionIds: [],
-      createdAt: now,
-      updatedAt: now,
-    }
+      const now = new Date().toISOString()
+      const state: ImplementationState = {
+        id,
+        ...(dto.userId ? { userId: dto.userId } : {}),
+        ...(dto.coachId ? { coachId: dto.coachId } : {}),
+        courseId,
+        courseVersion: dto.courseVersion || '1.0.0',
+        completedMissionIds: [],
+        createdAt: now,
+        updatedAt: now,
+      }
 
-    await this.repository.save(state)
-    return state
+      if (this.methodologyService) {
+        const methodology = await this.methodologyService.resolveGraph(
+          courseId,
+          dto.coachId,
+          dto.methodologyId,
+          dto.methodologyVersion,
+        )
+        state.methodologyId = methodology.id
+        state.methodologyVersion = methodology.version
+        state.methodologyHash = methodology.canonicalHash
+        state.courseVersion = methodology.version
+      }
+
+      await this.repository.save(state)
+      return state
+    })
   }
 
   async updateLearnerSetup(implementationId: string, dto: LearnerSetupDTO): Promise<ImplementationState> {
-    const state = await this.repository.getById(implementationId)
-    if (!state) throw new Error(`Implementation '${implementationId}' not found`)
     const goal = dto.goal?.trim()
     if (!goal) throw new Error('goal is required')
     if (!['15_30_MIN', '30_60_MIN', '1_2_HOURS', 'VARIES'].includes(dto.availableTime)) {
@@ -87,15 +202,19 @@ export class ImplementationService {
     if (!['DIRECT', 'QUESTIONS', 'EXAMPLE', 'ADAPTIVE'].includes(dto.helpPreference)) {
       throw new Error('helpPreference is invalid')
     }
-    state.learnerSetup = {
-      goal: goal.slice(0, 300),
-      availableTime: dto.availableTime,
-      helpPreference: dto.helpPreference,
-      updatedAt: new Date().toISOString(),
-    }
-    state.updatedAt = new Date().toISOString()
-    await this.repository.save(state)
-    return state
+    return this.runExclusive(implementationId, async () => {
+      const state = await this.repository.getById(implementationId)
+      if (!state) throw new Error(`Implementation '${implementationId}' not found`)
+      state.learnerSetup = {
+        goal: goal.slice(0, 300),
+        availableTime: dto.availableTime,
+        helpPreference: dto.helpPreference,
+        updatedAt: new Date().toISOString(),
+      }
+      state.updatedAt = new Date().toISOString()
+      await this.repository.save(state)
+      return state
+    })
   }
 
   /**
@@ -103,11 +222,12 @@ export class ImplementationService {
    *
    * Flow:
    * 1. Load authoritative state.
-   * 2. Validate mission exists in course definition.
-   * 3. Derive current progress.
-   * 4. Verify mission is legally available (available, active, or submitted). Locked missions are rejected.
-   * 5. Set activeMissionId = missionId.
-   * 6. Persist to repository.
+   * 2. Resolve methodology from the persisted courseId (fail loudly on unknown).
+   * 3. Validate mission exists in that methodology.
+   * 4. Derive current progress.
+   * 5. Verify mission is legally available (available, active, or submitted). Locked missions are rejected.
+   * 6. Set activeMissionId = missionId.
+   * 7. Persist to repository.
    */
   async startMission(
     implementationId: string,
@@ -118,52 +238,64 @@ export class ImplementationService {
       throw new Error('missionId is required')
     }
 
-    const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
-    const mission = allCourseMissions.find((m) => m.id === missionId)
-    if (!mission) {
-      throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
-    }
+    return this.runExclusive(implementationId, async () => {
+      const state = await this.repository.getById(implementationId)
+      if (!state) {
+        throw new Error(`Implementation '${implementationId}' not found`)
+      }
 
-    const state = await this.repository.getById(implementationId)
-    if (!state) {
-      throw new Error(`Implementation '${implementationId}' not found`)
-    }
+      const workflow = await this.getWorkflowContext(state)
+      const course = workflow.course
+      const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
+      const mission = allCourseMissions.find((m) => m.id === missionId)
+      if (!mission) {
+        throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
+      }
 
-    const currentCompleted = new Set(state.completedMissionIds)
-    const currentProgress = deriveMissionProgress(allCourseMissions, currentCompleted)
-    const currentMissionState = currentProgress[missionId]
+      const currentCompleted = new Set(state.completedMissionIds)
+      const currentProgress = workflow.runtime
+        ? workflow.runtime.deriveProgress(currentCompleted, state.activeMissionId, state.workflowDecisions)
+        : deriveMissionProgress(allCourseMissions, currentCompleted)
+      const currentMissionState = currentProgress[missionId]
 
-    if (currentMissionState === 'locked') {
-      throw new Error(
-        `Cannot start mission '${missionId}': mission is currently locked due to unmet prerequisites`,
-      )
-    }
+      if (currentMissionState === 'locked') {
+        throw new Error(
+          `Cannot start mission '${missionId}': mission is currently locked due to unmet prerequisites`,
+        )
+      }
 
-    if (!['available', 'active', 'submitted', 'completed'].includes(currentMissionState)) {
-      throw new Error(
-        `Cannot start mission '${missionId}': invalid progress state '${currentMissionState}'`,
-      )
-    }
+      if (!['available', 'active', 'submitted', 'completed'].includes(currentMissionState)) {
+        throw new Error(
+          `Cannot start mission '${missionId}': invalid progress state '${currentMissionState}'`,
+        )
+      }
 
-    state.activeMissionId = missionId
-    state.updatedAt = new Date().toISOString()
-    await this.repository.save(state)
-    return state
+      state.activeMissionId = missionId
+      state.updatedAt = new Date().toISOString()
+      await this.repository.save(state)
+      return state
+    })
   }
 
   /**
    * Verified Action End-to-End Submission Pipeline (TASK-004)
    *
-   * Flow:
+   * Flow (whole read-modify-write cycle serialized per implementation):
    * 1. Load authoritative ImplementationState (must exist).
    * 2. Validate missionId exists in course DAG.
    * 3. Derive current graph progress using progression.ts math.
    * 4. Verify mission can legally receive a submission (not locked).
-   * 5. Check idempotency: if mission is already completed, return existing verified state.
-   * 6. Validate evidence is non-empty.
-   * 7. Invoke evidence evaluator (Gemini + schema validation + applyEvaluationPolicy).
-   * 8. IF PASS: Apply legal persisted transition to ImplementationState and persist canonical artifact.
-   * 9. IF NOT PASS: Return evaluation & feedback without mutating ImplementationState.
+   * 5. Idempotency: if mission is already completed, return existing verified state
+   *    WITHOUT invoking the paid evaluator.
+   * 6. Fail loudly on unsupported artifact declarations / missing consumed artifacts.
+   * 7. Resolve criteria: coach-scoped if coachId exists (failing safely if missing), or pack rubric for no-coach path.
+   * 8. Snapshot criteria id/version before evaluator await.
+   * 9. Invoke evidence evaluator (Gemini + schema validation + applyEvaluationPolicy).
+   * 10. Stale criteria detection: re-read active criteria; if version changed, record v1 provenance and abort progression.
+   * 11. Append evaluation provenance record (for both PASS and non-PASS).
+   * 12. IF PASS: Apply legal persisted transition, materialize canonical artifacts
+   *     (post-condition guarded) and persist.
+   * 13. IF NOT PASS: Return evaluation & feedback without mutating ImplementationState progression.
    */
   async submitEvidence(
     implementationId: string,
@@ -187,194 +319,331 @@ export class ImplementationService {
     if (!trimmedEvidence) {
       throw new Error('Evidence text cannot be empty or whitespace')
     }
+    const evidenceHash = crypto.createHash('sha256').update(trimmedEvidence).digest('hex')
 
-    // 1. Load authoritative state
-    const state = await this.repository.getById(implementationId)
-    if (!state) {
-      throw new Error(`Implementation '${implementationId}' not found`)
-    }
+    return this.runExclusive(implementationId, async () => {
+      // 1. Load authoritative state
+      const state = await this.repository.getById(implementationId)
+      if (!state) {
+        throw new Error(`Implementation '${implementationId}' not found`)
+      }
 
-    // 2. Validate mission exists in course definition
-    const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
-    const mission = allCourseMissions.find((m) => m.id === missionId)
-    if (!mission) {
-      throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
-    }
+      // 2. Resolve methodology from persisted courseId and validate mission exists in it
+      const workflow = await this.getWorkflowContext(state)
+      const course = workflow.course
+      const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
+      const mission = allCourseMissions.find((m) => m.id === missionId)
+      if (!mission) {
+        throw new Error(`Mission '${missionId}' not found in course '${course.id}'`)
+      }
 
-    // 3. Derive current progress
-    const currentCompleted = new Set(state.completedMissionIds)
-    const currentProgress = deriveMissionProgress(allCourseMissions, currentCompleted)
-    const currentMissionState = currentProgress[missionId]
+      const priorSubmission = dto.submissionId
+        ? state.evaluationProvenance?.find(
+            (record) => record.submissionId === dto.submissionId && record.missionId === missionId,
+          )
+        : undefined
+      if (priorSubmission) {
+        if (priorSubmission.evidenceHash !== evidenceHash) {
+          throw new Error(`submissionId '${dto.submissionId}' is already bound to different evidence`)
+        }
+        return {
+          interactionType: 'EVIDENCE_SUBMISSION' as const,
+          message: priorSubmission.evaluation?.message || priorSubmission.evaluation?.coachingFeedback || 'Esta entrega ya fue evaluada.',
+          evaluation: priorSubmission.evaluation,
+          policyVerdict: priorSubmission.policyVerdict,
+          state,
+          completed: state.completedMissionIds.includes(missionId),
+        }
+      }
 
-    // 4. Verify mission can legally receive submission
-    if (currentMissionState === 'locked') {
-      throw new Error(
-        `Cannot submit evidence for mission '${missionId}': mission is currently locked due to unmet prerequisites`,
-      )
-    }
+      // 3. Derive current progress
+      const currentCompleted = new Set(state.completedMissionIds)
+      const currentProgress = workflow.runtime
+        ? workflow.runtime.deriveProgress(currentCompleted, state.activeMissionId, state.workflowDecisions)
+        : deriveMissionProgress(allCourseMissions, currentCompleted)
+      const currentMissionState = currentProgress[missionId]
 
-    // Resolve consumed artifacts for this mission (e.g. 'premise' for N02/N03)
-    const consumedArtifacts: Record<string, ImplementationArtifact> = {}
-    if (mission.consumesArtifacts && mission.consumesArtifacts.length > 0) {
-      for (const artifactKey of mission.consumesArtifacts) {
-        const artifact = state.artifacts?.[artifactKey]
-        if (!artifact) {
+      // 4. Verify mission can legally receive submission
+      if (currentMissionState === 'locked') {
+        throw new Error(
+          `Cannot submit evidence for mission '${missionId}': mission is currently locked due to unmet prerequisites`,
+        )
+      }
+
+      // 5. Idempotency BEFORE any paid evaluation: an already-verified mission never
+      // re-invokes the evaluator nor re-mutates canonical state on duplicate submissions.
+      if (state.completedMissionIds.includes(missionId)) {
+        return {
+          interactionType: 'EVIDENCE_SUBMISSION' as const,
+          message: 'Esta misión ya quedó verificada. Podemos hablar de lo que sigue.',
+          policyVerdict: 'PASS' as const,
+          state,
+          completed: true,
+        }
+      }
+
+      // 6. Fail loudly on unsupported artifact declarations BEFORE any evaluation cost.
+      // A declared canonical artifact must never PASS silently without materializing.
+      const productionSpecs = resolveArtifactProductions(mission)
+
+      // 7. Resolve consumed artifacts for this mission; fail closed when missing.
+      const consumedArtifacts: Record<string, ImplementationArtifact> = {}
+      if (mission.consumesArtifacts && mission.consumesArtifacts.length > 0) {
+        for (const artifactKey of mission.consumesArtifacts) {
+          const artifact = state.artifacts?.[artifactKey]
+          if (!artifact) {
+            throw new Error(
+              `Cannot evaluate mission '${missionId}': required artifact '${artifactKey}' from previous missions is missing`,
+            )
+          }
+          consumedArtifacts[artifactKey] = artifact
+        }
+      }
+
+      // 8. Resolve criteria authoritatively
+      let resolvedRubric: Rubric | undefined
+      let criteriaSnapshot: { id: string; version: string; fingerprint: string }
+
+      if (state.coachId) {
+        // Coach-scoped resolution:
+        // Must resolve ONLY confirmed active criteria for (coachId, state.courseId, missionId).
+        // Missing criteria must fail explicitly and safely, never use another coach or a static rubric.
+        const coachCalibration = await this.calibrationRepository?.getByMissionId(
+          missionId,
+          undefined,
+          state.courseId,
+          state.coachId,
+        )
+        if (!coachCalibration || coachCalibration.status !== 'confirmed' || !coachCalibration.proposedRubric) {
           throw new Error(
-            `Cannot evaluate mission '${missionId}': required artifact '${artifactKey}' from previous missions is missing`,
+            `No active confirmed criteria found for coach '${state.coachId}' on mission '${missionId}' in course '${state.courseId}'`,
           )
         }
-        consumedArtifacts[artifactKey] = artifact
+        resolvedRubric = coachCalibration.proposedRubric
+        criteriaSnapshot = {
+          id: resolvedRubric.id,
+          version: resolvedRubric.version || '1.0.0',
+          fingerprint: criteriaFingerprint(resolvedRubric),
+        }
+      } else {
+        // Legacy / no-coach path:
+        const calibration = await this.calibrationRepository?.getByMissionId(missionId, undefined, course.id)
+        resolvedRubric = (calibration?.status === 'confirmed' && calibration.proposedRubric)
+          ? calibration.proposedRubric
+          : mission.rubric
+        criteriaSnapshot = {
+          id: resolvedRubric?.id ?? `rubric-${mission.id}`,
+          version: resolvedRubric?.version ?? '1.0.0',
+          fingerprint: criteriaFingerprint(resolvedRubric),
+        }
       }
-    }
 
-    // 6. Evaluate evidence via the evaluator pipeline (Gemini/Mock -> Schema Validator -> applyEvaluationPolicy)
-    const calibration = await this.calibrationRepository?.getByMissionId(missionId)
-    const evaluationResult = await evaluator.evaluateEvidence({
-      missionId,
-      evidence: trimmedEvidence,
-      consumedArtifacts,
-      currentProgress: currentMissionState,
-      recentInteraction: normalizeRecentInteraction(dto.recentInteraction),
-      learnerHelpPreference: state.learnerSetup?.helpPreference,
-      evaluationRubric: calibration?.status === 'confirmed' ? calibration.proposedRubric : undefined,
-    })
+      // 9. Evaluate evidence via the evaluator pipeline (Gemini/Mock -> Schema Validator -> applyEvaluationPolicy)
+      const evaluationResult = await evaluator.evaluateEvidence({
+        missionId,
+        evidence: trimmedEvidence,
+        courseId: course.id,
+        consumedArtifacts,
+        currentProgress: currentMissionState,
+        recentInteraction: normalizeRecentInteraction(dto.recentInteraction),
+        learnerHelpPreference: state.learnerSetup?.helpPreference,
+        evaluationRubric: resolvedRubric,
+      })
 
-    const { evaluation: rawEvaluation, policyVerdict } = evaluationResult
-    const evaluation = {
-      ...rawEvaluation,
-      message: adaptCompanionGuidance(
-        rawEvaluation.message || rawEvaluation.coachingFeedback,
-        state.learnerSetup?.helpPreference,
-        mission,
+      if (workflow.runtime && workflow.methodologyHash) {
+        const latestWorkflow = await this.getWorkflowContext(state)
+        if (latestWorkflow.methodologyHash !== workflow.methodologyHash) {
+          throw new Error(
+            `Stale methodology detected: graph hash changed during evaluation for '${workflow.methodologyId || state.courseId}'. State progression aborted.`,
+          )
+        }
+      }
+
+      // 10. Snapshot criteria version verification:
+      // After evaluator await, re-read active criteria and if version changed,
+      // return/throw explicit stale-criteria without progression mutation.
+      if (state.coachId) {
+        const latestCalibration = await this.calibrationRepository?.getByMissionId(
+          missionId,
+          undefined,
+          state.courseId,
+          state.coachId,
+        )
+        const latestRubric = latestCalibration?.proposedRubric
+        const latestVersion = latestRubric?.version || latestCalibration?.version || '1.0.0'
+        const latestFingerprint = criteriaFingerprint(latestRubric)
+        if (
+          !latestCalibration ||
+          latestCalibration.status !== 'confirmed' ||
+          latestVersion !== criteriaSnapshot.version ||
+          latestFingerprint !== criteriaSnapshot.fingerprint
+        ) {
+          const now = new Date().toISOString()
+          const staleRecord: EvaluationProvenanceRecord = {
+            id: `prov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            evaluationId:
+              evaluationResult.evaluation.evaluationId ||
+              `eval-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            submissionId: dto.submissionId || `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            implementationId,
+            coachId: state.coachId,
+            courseId: course.id,
+            missionId,
+            criteriaSetId: criteriaSnapshot.id,
+            criteriaVersion: criteriaSnapshot.version,
+            criterionResults: evaluationResult.evaluation.criteria,
+            policyVerdict: evaluationResult.policyVerdict,
+            confidence: evaluationResult.evaluation.confidence,
+            evidenceHash,
+            timestamp: now,
+            missingRequirements:
+              evaluationResult.policyVerdict === 'HUMAN_REVIEW' && resolvedRubric
+                ? resolvedRubric.criteria
+                    .filter(
+                      (c) =>
+                        c.isRequired &&
+                        !evaluationResult.evaluation.criteria.some((rc) => rc.criterionId === c.id),
+                    )
+                    .map((c) => c.id)
+                : undefined,
+          }
+          state.evaluationProvenance = [...(state.evaluationProvenance || []), staleRecord]
+          await this.repository.save(state)
+
+          throw new Error(
+            `Stale criteria detected: criteria version changed from '${criteriaSnapshot.version}' during evaluation. State progression aborted.`,
+          )
+        }
+      }
+
+      const { evaluation: rawEvaluation, policyVerdict } = evaluationResult
+      const now = new Date().toISOString()
+      const evaluationId =
+        rawEvaluation.evaluationId || `eval-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const submissionId = dto.submissionId || `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const evaluation = {
+        ...rawEvaluation,
+        evaluationId,
+        submissionId,
+        missionId,
+        evaluatedAt: now,
+        criteriaVersion: criteriaSnapshot.version,
+        evidenceHash,
+        message: adaptCompanionGuidance(
+          rawEvaluation.message || rawEvaluation.coachingFeedback,
+          state.learnerSetup?.helpPreference,
+          mission,
+          policyVerdict,
+        ),
+        coachingFeedback: adaptCompanionGuidance(
+          rawEvaluation.coachingFeedback,
+          state.learnerSetup?.helpPreference,
+          mission,
+          policyVerdict,
+        ),
+      }
+      const interactionType = evaluation.interactionType || 'EVIDENCE_SUBMISSION'
+      const message = evaluation.message || evaluation.coachingFeedback || ''
+
+      const provenanceRecord: EvaluationProvenanceRecord = {
+        id: `prov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        evaluationId,
+        submissionId,
+        implementationId,
+        coachId: state.coachId,
+        courseId: course.id,
+        missionId,
+        criteriaSetId: criteriaSnapshot.id,
+        criteriaVersion: criteriaSnapshot.version,
+        criterionResults: rawEvaluation.criteria,
         policyVerdict,
-      ),
-      coachingFeedback: adaptCompanionGuidance(
-        rawEvaluation.coachingFeedback,
-        state.learnerSetup?.helpPreference,
-        mission,
-        policyVerdict,
-      ),
-    }
-    const interactionType = evaluation.interactionType || 'EVIDENCE_SUBMISSION'
-    const message = evaluation.message || evaluation.coachingFeedback || ''
+        confidence: rawEvaluation.confidence,
+        evidenceHash,
+        timestamp: now,
+        missingRequirements:
+          policyVerdict === 'HUMAN_REVIEW' && resolvedRubric
+            ? resolvedRubric.criteria
+                .filter(
+                  (c) =>
+                    c.isRequired &&
+                    !rawEvaluation.criteria.some((rc) => rc.criterionId === c.id),
+                )
+                .map((c) => c.id)
+            : undefined,
+        qualitySignals: rawEvaluation.qualitySignals,
+        evaluation,
+        methodologyId: workflow.methodologyId,
+        methodologyVersion: workflow.methodologyVersion,
+        methodologyHash: workflow.methodologyHash,
+      }
+      state.evaluationProvenance = [...(state.evaluationProvenance || []), provenanceRecord]
+      state.workflowDecisions = {
+        ...(state.workflowDecisions || {}),
+        [missionId]: policyVerdict,
+      }
 
-    // A completed mission can still receive a conversational reply. Evidence re-submissions remain
-    // idempotent and retain the canonical artifact that was already verified.
-    if (state.completedMissionIds.includes(missionId)) {
-      if (interactionType !== 'EVIDENCE_SUBMISSION') {
+      // 11. State Transition: ONLY if interactionType === 'EVIDENCE_SUBMISSION' AND policyVerdict === 'PASS'
+      if (interactionType === 'EVIDENCE_SUBMISSION' && policyVerdict === 'PASS') {
+        if (!state.completedMissionIds.includes(missionId)) {
+          state.completedMissionIds = [...state.completedMissionIds, missionId]
+        }
+
+        if (state.activeMissionId === missionId) {
+          delete state.activeMissionId
+        }
+
+        // Consequential Artifact Pipeline: canonical artifacts produced only on verified PASS.
+        // Production is declarative (ArtifactProductionSpec); every declared key was validated
+        // before evaluation, so a declared artifact can never silently disappear on PASS.
+        state.artifacts = state.artifacts ?? {}
+
+        for (const spec of productionSpecs) {
+          const existingArtifact = state.artifacts[spec.key]
+          if (!existingArtifact) {
+            state.artifacts[spec.key] = {
+              key: spec.key,
+              sourceMissionId: mission.id,
+              value: buildCanonicalArtifactValue(spec, trimmedEvidence),
+              createdAt: now,
+              updatedAt: now,
+            }
+          }
+        }
+
+        // Post-condition guard: every declared artifact materialized before claiming completion.
+        for (const spec of productionSpecs) {
+          if (!state.artifacts[spec.key]) {
+            throw new Error(
+              `Canonical artifact '${spec.key}' failed to materialize for mission '${mission.id}'. Completion rejected.`,
+            )
+          }
+        }
+
+        state.updatedAt = now
+        await this.repository.save(state)
+
         return {
           interactionType,
           message,
           evaluation,
-          policyVerdict,
+          policyVerdict: 'PASS' as const,
           state,
-          completed: false,
+          completed: true,
         }
       }
 
-      return {
-        interactionType: 'EVIDENCE_SUBMISSION',
-        message: 'Esta misión ya quedó verificada. Podemos hablar de lo que sigue.',
-        policyVerdict: 'PASS',
-        state,
-        completed: true,
-      }
-    }
-
-    // 7. State Transition: ONLY if interactionType === 'EVIDENCE_SUBMISSION' AND policyVerdict === 'PASS'
-    if (interactionType === 'EVIDENCE_SUBMISSION' && policyVerdict === 'PASS') {
-      const now = new Date().toISOString()
-      let stateChanged = false
-
-      if (!state.completedMissionIds.includes(missionId)) {
-        state.completedMissionIds = [...state.completedMissionIds, missionId]
-        stateChanged = true
-      }
-
-      if (state.activeMissionId === missionId) {
-        delete state.activeMissionId
-        stateChanged = true
-      }
-
-      // Consequential Artifact Pipeline: Canonical artifacts produced only on verified PASS
-      state.artifacts = state.artifacts ?? {}
-
-      if (mission.producesArtifacts?.includes('premise')) {
-        const existingArtifact = state.artifacts['premise']
-        if (!existingArtifact) {
-          state.artifacts['premise'] = {
-            key: 'premise',
-            sourceMissionId: mission.id,
-            value: {
-              statement: trimmedEvidence,
-            },
-            createdAt: now,
-            updatedAt: now,
-          }
-          stateChanged = true
-        }
-      }
-
-      if (mission.producesArtifacts?.includes('direct_structure')) {
-        const existingArtifact = state.artifacts['direct_structure']
-        if (!existingArtifact) {
-          state.artifacts['direct_structure'] = {
-            key: 'direct_structure',
-            sourceMissionId: mission.id,
-            value: {
-              variant: 'direct',
-              content: trimmedEvidence,
-              sourcePremiseArtifactId: state.artifacts['premise']?.key || 'premise',
-            },
-            createdAt: now,
-            updatedAt: now,
-          }
-          stateChanged = true
-        }
-      }
-
-      if (mission.producesArtifacts?.includes('narrative_structure')) {
-        const existingArtifact = state.artifacts['narrative_structure']
-        if (!existingArtifact) {
-          state.artifacts['narrative_structure'] = {
-            key: 'narrative_structure',
-            sourceMissionId: mission.id,
-            value: {
-              variant: 'narrative',
-              content: trimmedEvidence,
-              sourcePremiseArtifactId: state.artifacts['premise']?.key || 'premise',
-            },
-            createdAt: now,
-            updatedAt: now,
-          }
-          stateChanged = true
-        }
-      }
-
-      if (stateChanged) {
-        state.updatedAt = now
-        await this.repository.save(state)
-      }
+      // 12. Non-PASS / CONVERSATION / AMBIGUOUS: Zero progression mutation, provenance persisted
+      await this.repository.save(state)
 
       return {
         interactionType,
         message,
         evaluation,
-        policyVerdict: 'PASS',
+        policyVerdict,
         state,
-        completed: true,
+        completed: false,
       }
-    }
-
-    // 8. Non-PASS / CONVERSATION / AMBIGUOUS: Zero state mutation
-    return {
-      interactionType,
-      message,
-      evaluation,
-      policyVerdict,
-      state,
-      completed: false,
-    }
+    })
   }
 
   /**
@@ -390,52 +659,79 @@ export class ImplementationService {
       throw new Error('missionId is required')
     }
 
-    // 1. Validate that missionId exists in course definition
-    const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
-    const validMissionIds = new Set(allCourseMissions.map((m) => m.id))
+    return this.runExclusive(implementationId, async () => {
+      // 1. Load authoritative state (must exist)
+      const state = await this.repository.getById(implementationId)
+      if (!state) {
+        throw new Error(`Implementation '${implementationId}' not found`)
+      }
 
-    if (!validMissionIds.has(missionId)) {
-      throw new Error(`Invalid missionId '${missionId}' not found in course '${course.id}'`)
-    }
+      // 2. Validate that missionId exists in the implementation's methodology
+      const workflow = await this.getWorkflowContext(state)
+      const course = workflow.course
+      const allCourseMissions = course.chapters.flatMap((chapter) => chapter.missions)
+      const mission = allCourseMissions.find((m) => m.id === missionId)
 
-    // 2. Load authoritative state (must exist)
-    const state = await this.repository.getById(implementationId)
-    if (!state) {
-      throw new Error(`Implementation '${implementationId}' not found`)
-    }
+      if (!mission) {
+        throw new Error(`Invalid missionId '${missionId}' not found in course '${course.id}'`)
+      }
 
-    // 3. Idempotency: If already completed, return unchanged state
-    if (state.completedMissionIds.includes(missionId)) {
+      // 3. Idempotency: If already completed, return unchanged state
+      if (state.completedMissionIds.includes(missionId)) {
+        return state
+      }
+
+      // 4. Legal Transition check: Target mission must not be locked
+      const currentCompleted = new Set(state.completedMissionIds)
+      const currentProgress = workflow.runtime
+        ? workflow.runtime.deriveProgress(currentCompleted, state.activeMissionId, state.workflowDecisions)
+        : deriveMissionProgress(allCourseMissions, currentCompleted)
+      const currentMissionState = currentProgress[missionId]
+
+      if (currentMissionState === 'locked') {
+        throw new Error(
+          `Cannot complete mission '${missionId}': mission is currently locked due to unmet prerequisites`,
+        )
+      }
+
+      if (!['available', 'active', 'submitted'].includes(currentMissionState)) {
+        throw new Error(
+          `Cannot complete mission '${missionId}': invalid progress state '${currentMissionState}'`,
+        )
+      }
+
+      // 5. Artifact consistency: a dev completion must never claim a transition whose
+      // canonical artifact cannot materialize (artifacts only arise from verified PASS),
+      // nor bypass declared artifact prerequisites (fail closed), matching
+      // submitEvidence production and consumption rules.
+      const productionSpecs = resolveArtifactProductions(mission)
+      if (productionSpecs.length > 0) {
+        throw new Error(
+          `Cannot dev-complete mission '${missionId}': it declares canonical artifacts [${productionSpecs
+            .map((spec) => spec.key)
+            .join(', ')}] that can only be produced by a verified submission.`,
+        )
+      }
+
+      for (const artifactKey of mission.consumesArtifacts ?? []) {
+        if (!state.artifacts?.[artifactKey]) {
+          throw new Error(
+            `Cannot complete mission '${missionId}': required artifact '${artifactKey}' from previous missions is missing`,
+          )
+        }
+      }
+
+      // 6. Apply transition and update state
+      state.completedMissionIds = [...state.completedMissionIds, missionId]
+      state.updatedAt = new Date().toISOString()
+
+      // Clear activeMissionId if it was the mission just completed (do not arbitrarily choose a next branch)
+      if (state.activeMissionId === missionId) {
+        delete state.activeMissionId
+      }
+
+      await this.repository.save(state)
       return state
-    }
-
-    // 4. Legal Transition check: Target mission must not be locked
-    const currentCompleted = new Set(state.completedMissionIds)
-    const currentProgress = deriveMissionProgress(allCourseMissions, currentCompleted)
-    const currentMissionState = currentProgress[missionId]
-
-    if (currentMissionState === 'locked') {
-      throw new Error(
-        `Cannot complete mission '${missionId}': mission is currently locked due to unmet prerequisites`,
-      )
-    }
-
-    if (!['available', 'active', 'submitted'].includes(currentMissionState)) {
-      throw new Error(
-        `Cannot complete mission '${missionId}': invalid progress state '${currentMissionState}'`,
-      )
-    }
-
-    // 5. Apply transition and update state
-    state.completedMissionIds = [...state.completedMissionIds, missionId]
-    state.updatedAt = new Date().toISOString()
-
-    // Clear activeMissionId if it was the mission just completed (do not arbitrarily choose a next branch)
-    if (state.activeMissionId === missionId) {
-      delete state.activeMissionId
-    }
-
-    await this.repository.save(state)
-    return state
+    })
   }
 }

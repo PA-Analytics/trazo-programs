@@ -9,18 +9,26 @@ import { CalibrationService } from './calibrationService.ts'
 import { EvidenceEvaluatorService } from './evaluator/evaluatorService.ts'
 import { GeminiEvidenceInterpreter } from './evaluator/geminiInterpreter.ts'
 import { createCanonicalGeminiRuntime, type CanonicalGeminiRuntime } from './ai/runtime.ts'
+import { AutonomyService } from './autonomy/autonomyService.ts'
+import { GeminiAutonomyReasoner } from './autonomy/geminiReasoner.ts'
+import { createAutonomyAuditRepository } from './repository.ts'
 import type { IdentityService } from './identityService.ts'
 import { ImplementationService } from './service.ts'
+import { MethodologyService } from './methodologyService.ts'
 import type {
   NextActionRequestDTO,
   AddCalibrationExampleDTO,
   ConfirmCalibrationDTO,
   CreateCalibrationDTO,
+  CreateImplementationDTO,
+  IAutonomyAuditRepository,
   JudgeCalibrationExampleDTO,
   LearnerSetupDTO,
+  LearnerStalledEventDTO,
   StartMissionDTO,
   SubmitEvidenceDTO,
 } from './types.ts'
+import type { MethodologyGraph } from '../domain/methodology.ts'
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -42,6 +50,7 @@ const MIME_TYPES: Record<string, string> = {
 
 const CREATOR_MODE_HEADER = 'x-trazo-mode'
 const USER_ID_HEADER = 'x-trazo-user-id'
+const AUTONOMY_TOKEN_HEADER = 'x-trazo-autonomy-token'
 
 async function requireRole(
   req: IncomingMessage,
@@ -104,6 +113,22 @@ function requireLegacyCreatorHeader(req: IncomingMessage, res: ServerResponse) {
   return false
 }
 
+function requireAutonomyEventAuth(req: IncomingMessage, res: ServerResponse) {
+  if (process.env.NODE_ENV !== 'production') return true
+
+  const configuredToken = process.env.TRAZO_AUTONOMY_EVENT_TOKEN?.trim()
+  const suppliedToken = req.headers[AUTONOMY_TOKEN_HEADER]
+  if (!configuredToken || suppliedToken !== configuredToken) {
+    sendJSON(res, 403, {
+      code: 'AUTONOMY_EVENT_AUTH_REQUIRED',
+      error: 'Esta superficie requiere autenticación de eventos autónomos.',
+    })
+    return false
+  }
+
+  return true
+}
+
 function serveStatic(res: ServerResponse, pathname: string, distDir: string): boolean {
   if (!fs.existsSync(distDir)) {
     return false
@@ -146,6 +171,9 @@ export interface ServerOptions {
   calibrationService?: CalibrationService
   identityService?: IdentityService
   aiRuntime?: CanonicalGeminiRuntime
+  autonomyService?: AutonomyService
+  autonomyAuditRepository?: IAutonomyAuditRepository
+  methodologyService?: MethodologyService
 }
 
 function sendJSON(
@@ -158,7 +186,7 @@ function sendJSON(
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PATCH, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Trazo-User-Id, X-Trazo-Mode',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Trazo-User-Id, X-Trazo-Mode, X-Trazo-Autonomy-Token',
     ...headers,
   })
   res.end(JSON.stringify(data))
@@ -356,6 +384,7 @@ export function createRequestListener(
 
   let evaluator = options.evaluatorService
   let companion = options.companionService
+  let autonomy = options.autonomyService
   const calibration = options.calibrationService
   const identity = options.identityService
   let runtime = options.aiRuntime
@@ -363,6 +392,15 @@ export function createRequestListener(
   function getRuntime() {
     runtime ??= createCanonicalGeminiRuntime()
     return runtime
+  }
+
+  function getAutonomyService() {
+    if (!autonomy) {
+      const auditRepo = options.autonomyAuditRepository || createAutonomyAuditRepository()
+      const reasoner = new GeminiAutonomyReasoner(getRuntime())
+      autonomy = new AutonomyService(service, service.repository, auditRepo, reasoner, options.methodologyService)
+    }
+    return autonomy
   }
 
   return async (req: IncomingMessage, res: ServerResponse) => {
@@ -454,11 +492,39 @@ export function createRequestListener(
         return
       }
 
+      const extractCoachContext = async () => {
+        const headerCoachId = typeof req.headers['x-trazo-coach-id'] === 'string' ? req.headers['x-trazo-coach-id'] : undefined
+        const headerUserId = typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined
+        if (identity && headerUserId) {
+          const profile = await identity.getProfile(headerUserId)
+          if (profile?.role === 'coach') return { coachId: profile.userId, userId: headerUserId }
+        }
+        if (!identity && headerCoachId) return { coachId: headerCoachId, userId: headerUserId }
+        return { coachId: undefined, userId: headerUserId }
+      }
+
+      if (options.methodologyService && method === 'POST' && pathname === '/api/v1/methodologies') {
+        if (!(await requireRole(req, res, identity, 'coach')) && identity) return
+        if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId } = await extractCoachContext()
+        const body = await parseBody<MethodologyGraph>(req)
+        try {
+          const graph = await options.methodologyService.save({ ...body, coachId: coachId || body.coachId })
+          sendJSON(res, 201, graph)
+        } catch (err: unknown) {
+          sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Invalid methodology graph' })
+        }
+        return
+      }
+
       const calibrationMatch = pathname.match(/^\/api\/v1\/calibrations\/([^/]+)$/)
       if (calibration && method === 'GET' && calibrationMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
-        const data = await calibration.get(calibrationMatch[1], typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined)
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
+        const versionQuery = url.searchParams.get('version') || undefined
+        const data = await calibration.get(calibrationMatch[1], userId, coachId, courseIdQuery, versionQuery)
         sendJSON(res, 200, data)
         return
       }
@@ -466,9 +532,11 @@ export function createRequestListener(
       if (calibration && method === 'POST' && calibrationMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         const body = await parseBody<CreateCalibrationDTO>(req)
         try {
-          sendJSON(res, 200, await calibration.create(calibrationMatch[1], body, typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.create(calibrationMatch[1], body, userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Calibration failed' })
         }
@@ -479,9 +547,11 @@ export function createRequestListener(
       if (calibration && method === 'POST' && calibrationExamplesMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         const body = await parseBody<AddCalibrationExampleDTO>(req)
         try {
-          sendJSON(res, 200, await calibration.addExample(calibrationExamplesMatch[1], body, typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.addExample(calibrationExamplesMatch[1], body, userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Example failed' })
         }
@@ -492,8 +562,10 @@ export function createRequestListener(
       if (calibration && method === 'POST' && generateExamplesMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         try {
-          sendJSON(res, 200, await calibration.generateExamples(generateExamplesMatch[1], typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.generateExamples(generateExamplesMatch[1], userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Generation failed' })
         }
@@ -504,9 +576,11 @@ export function createRequestListener(
       if (calibration && method === 'PATCH' && judgeExampleMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         const body = await parseBody<JudgeCalibrationExampleDTO>(req)
         try {
-          sendJSON(res, 200, await calibration.judgeExample(judgeExampleMatch[1], judgeExampleMatch[2], body, typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.judgeExample(judgeExampleMatch[1], judgeExampleMatch[2], body, userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Judgement failed' })
         }
@@ -517,8 +591,10 @@ export function createRequestListener(
       if (calibration && method === 'POST' && proposeCalibrationMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         try {
-          sendJSON(res, 200, await calibration.propose(proposeCalibrationMatch[1], typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.propose(proposeCalibrationMatch[1], userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Proposal failed' })
         }
@@ -529,9 +605,11 @@ export function createRequestListener(
       if (calibration && method === 'POST' && confirmCalibrationMatch) {
         if (!(await requireRole(req, res, identity, 'coach')) && identity) return
         if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId, userId } = await extractCoachContext()
+        const courseIdQuery = url.searchParams.get('courseId') || undefined
         const body = await parseBody<ConfirmCalibrationDTO>(req)
         try {
-          sendJSON(res, 200, await calibration.confirm(confirmCalibrationMatch[1], body, typeof req.headers[USER_ID_HEADER] === 'string' ? req.headers[USER_ID_HEADER] : undefined))
+          sendJSON(res, 200, await calibration.confirm(confirmCalibrationMatch[1], body, userId, coachId, courseIdQuery))
         } catch (err: unknown) {
           sendJSON(res, 400, { error: err instanceof Error ? err.message : 'Confirmation failed' })
         }
@@ -546,7 +624,10 @@ export function createRequestListener(
         const receivedAt = new Date().toISOString()
         if (!companion) {
           try {
-            companion = new CompanionService(new GeminiNextActionProposer(getRuntime()))
+            companion = new CompanionService(
+              new GeminiNextActionProposer(getRuntime()),
+              options.methodologyService,
+            )
           } catch (err: unknown) {
             sendJSON(res, 503, {
               error: `Companion service is unavailable: ${err instanceof Error ? err.message : String(err)}`,
@@ -703,7 +784,7 @@ export function createRequestListener(
           }
         }
 
-        const body = await parseBody<{ missionId: string; evidence: string }>(req)
+        const body = await parseBody<{ missionId: string; evidence: string; courseId?: string }>(req)
         try {
           const result = await evaluator.evaluateEvidence(body)
           sendJSON(res, 200, result)
@@ -715,12 +796,87 @@ export function createRequestListener(
         return
       }
 
+      // POST /api/v1/events/learner-stalled OR POST /api/v1/implementations/:id/events/learner-stalled
+      const implStalledMatch = pathname.match(/^\/api\/v1\/implementations\/([^/]+)\/events\/learner-stalled$/)
+      if (
+        method === 'POST' &&
+        (pathname === '/api/v1/events/learner-stalled' || implStalledMatch)
+      ) {
+        if (!requireAutonomyEventAuth(req, res)) return
+        const body = await parseBody<LearnerStalledEventDTO>(req)
+        const implementationId = implStalledMatch ? implStalledMatch[1] : body.implementationId
+
+        if (!implementationId) {
+          sendJSON(res, 400, { error: 'implementationId is required' })
+          return
+        }
+
+        if (body.eventType !== undefined && body.eventType !== 'learner_stalled') {
+          sendJSON(res, 400, { error: `Invalid eventType '${body.eventType}'` })
+          return
+        }
+
+        if (implStalledMatch && body.implementationId && body.implementationId !== implementationId) {
+          sendJSON(res, 400, { error: 'implementationId does not match the route scope' })
+          return
+        }
+
+        if (!body.courseVersion || !body.observedStateUpdatedAt) {
+          sendJSON(res, 400, {
+            error: 'courseVersion and observedStateUpdatedAt are required for event freshness validation',
+          })
+          return
+        }
+
+        if (identity && req.headers[USER_ID_HEADER]) {
+          const authOk = await requireLearnerImplementation(req, res, identity, implementationId)
+          if (!authOk) return
+        }
+
+        const event: LearnerStalledEventDTO = {
+          ...body,
+          implementationId,
+          eventType: 'learner_stalled',
+        }
+
+        const autonomySvc = autonomy || getAutonomyService()
+        try {
+          const result = await autonomySvc.handleStalledLearner(event)
+          sendJSON(res, 200, result)
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Autonomy processing failed'
+          const normalizedMessage = message.toLowerCase()
+          const status = normalizedMessage.includes('not found')
+            ? 404
+            : normalizedMessage.includes('required') ||
+              normalizedMessage.includes('invalid') ||
+              normalizedMessage.includes('mismatch') ||
+              normalizedMessage.includes('illegal') ||
+              normalizedMessage.includes('locked mission')
+            ? 400
+            : 500
+          sendJSON(res, status, { error: message })
+        }
+        return
+      }
+
       // POST /api/v1/implementations - Create new implementation
       if (method === 'POST' && pathname === '/api/v1/implementations') {
-        const body = await parseBody<{ id?: string; courseId: string; courseVersion?: string }>(req)
+        const body = await parseBody<CreateImplementationDTO>(req)
         if (!body.courseId) {
           sendJSON(res, 400, { error: 'courseId is required' })
           return
+        }
+        if (identity && body.coachId) {
+          const userId = req.headers[USER_ID_HEADER]
+          const profile = typeof userId === 'string' ? await identity.getProfile(userId) : null
+          if (!profile || profile.role !== 'coach' || profile.userId !== body.coachId) {
+            sendJSON(res, 403, {
+              code: 'COACH_CONTEXT_MISMATCH',
+              error: 'coachId debe pertenecer al perfil coach autenticado.',
+            })
+            return
+          }
         }
         const created = await service.createImplementation(body)
         sendJSON(res, 201, created)
@@ -738,6 +894,16 @@ export function createRequestListener(
         }
 
         const implementationId = devCompleteMatch[1]
+        // Ownership/fail-closed guard: even with dev routes enabled, the route is
+        // restricted to the owning learner when identity is wired, and to the
+        // explicit legacy creator header in no-identity demo mode. Anonymous or
+        // cross-user completion must never succeed (F2).
+        if (identity) {
+          if (!(await requireLearnerImplementation(req, res, identity, implementationId))) return
+        } else if (!requireLegacyCreatorHeader(req, res)) {
+          return
+        }
+
         const body = await parseBody<{ missionId: string }>(req)
         try {
           const updated = await service.devCompleteMission(implementationId, body)
@@ -749,6 +915,24 @@ export function createRequestListener(
             : 400
           sendJSON(res, status, { error: message })
         }
+        return
+      }
+
+      // Route: /api/v1/implementations/:id (Strictly read-only)
+      const getMethodologyMatch = pathname.match(/^\/api\/v1\/implementations\/([^/]+)\/methodology$/)
+      if (method === 'GET' && getMethodologyMatch) {
+        const implementationId = getMethodologyMatch[1]
+        if (identity && !(await requireLearnerImplementation(req, res, identity, implementationId))) return
+        const state = await service.getImplementation(implementationId)
+        if (!state) {
+          sendJSON(res, 404, { error: `Implementation '${implementationId}' not found` })
+          return
+        }
+        if (!options.methodologyService) {
+          sendJSON(res, 503, { error: 'Methodology runtime is unavailable' })
+          return
+        }
+        sendJSON(res, 200, await options.methodologyService.getWorkflowView(state))
         return
       }
 

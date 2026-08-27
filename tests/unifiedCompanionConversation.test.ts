@@ -22,9 +22,11 @@ const n01Rubric: Rubric = n01Mission.rubric!
 class MockUnifiedInterpreter implements IEvidenceInterpreter {
   public mockResponse: StructuredEvidenceEvaluation | null = null
   public lastParams?: Parameters<IEvidenceInterpreter['interpret']>[0]
+  public callCount = 0
 
   async interpret(params: Parameters<IEvidenceInterpreter['interpret']>[0]): Promise<StructuredEvidenceEvaluation> {
     this.lastParams = params
+    this.callCount += 1
     if (!this.mockResponse) {
       throw new Error('Mock response not configured')
     }
@@ -330,7 +332,7 @@ test('7. Recent mission exchange is forwarded as bounded, non-authoritative cont
   assert.deepEqual((await repository.getById(initialState.id))?.completedMissionIds, [])
 })
 
-test('8. Completed missions can answer conversation without changing verified progress', async () => {
+test('8. Completed missions stay idempotent: no evaluator call, no progress change, conversation lives at /next-action', async () => {
   const repository = new MemoryImplementationRepository()
   const service = new ImplementationService(repository)
   const interpreter = new MockUnifiedInterpreter()
@@ -349,6 +351,7 @@ test('8. Completed missions can answer conversation without changing verified pr
     ],
   }
   await service.submitEvidence(initialState.id, { missionId: 'N01', evidence: validEvidence }, evaluatorService)
+  const callsAfterVerification = interpreter.callCount
 
   interpreter.mockResponse = {
     interactionType: 'CONVERSATION',
@@ -362,8 +365,14 @@ test('8. Completed missions can answer conversation without changing verified pr
     evaluatorService,
   )
 
-  assert.equal(response.interactionType, 'CONVERSATION')
-  assert.equal(response.completed, false)
+  // F4: duplicate submission of a completed mission is answered by the canned
+  // idempotent response WITHOUT invoking the paid evaluator again.
+  assert.equal(interpreter.callCount, callsAfterVerification)
+  assert.equal(response.interactionType, 'EVIDENCE_SUBMISSION')
+  assert.equal(response.policyVerdict, 'PASS')
+  assert.equal(response.completed, true)
+  assert.match(response.message, /ya quedó verificada/)
+  assert.equal(response.evaluation, undefined)
   const stateAfter = await repository.getById(initialState.id)
   assert.deepEqual(stateAfter?.completedMissionIds, ['N01'])
   assert.equal(stateAfter?.artifacts?.premise?.value.statement, validEvidence)

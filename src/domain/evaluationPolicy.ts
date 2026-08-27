@@ -4,6 +4,8 @@ import type {
   StructuredEvidenceEvaluation,
 } from './course'
 
+export const DETERMINISTIC_CONFIDENCE_THRESHOLD = 0.70
+
 /**
  * Pure deterministic policy evaluator.
  * Derives PolicyVerdict strictly from rubric criteria and criterion-level results.
@@ -13,14 +15,16 @@ import type {
  * - Missing required criterion -> HUMAN_REVIEW
  * - Any required criterion NOT_MET -> REWORK
  * - Any required criterion UNVERIFIABLE (and none NOT_MET) -> CLARIFY
- * - All required criteria PASS -> PASS
+ * - Internal contradiction (recommendation non-PASS or conflict) -> fails closed to non-PASS
+ * - Confidence below deterministic threshold (< 0.70) -> HUMAN_REVIEW (cannot PASS)
+ * - All required criteria PASS + valid confidence -> PASS
  *
  * Optional criteria (isRequired: false) that are NOT_MET or UNVERIFIABLE do NOT block PASS.
- * Confidence and agent recommendations are advisory/metadata only and do not affect transitions.
  */
 export function applyEvaluationPolicy(
   evaluation: StructuredEvidenceEvaluation,
   rubric: Rubric,
+  confidenceThreshold: number = DETERMINISTIC_CONFIDENCE_THRESHOLD,
 ): PolicyVerdict {
   if (
     !rubric.criteria ||
@@ -73,6 +77,25 @@ export function applyEvaluationPolicy(
   }
 
   if (hasUnverifiableRequired) {
+    return 'CLARIFY'
+  }
+
+  // Low confidence below deterministic threshold must not PASS
+  if (
+    typeof evaluation.confidence === 'number' &&
+    evaluation.confidence < confidenceThreshold
+  ) {
+    return 'HUMAN_REVIEW'
+  }
+
+  // Internal contradiction guards: non-PASS recommendation prevents premature PASS
+  if (evaluation.recommendation === 'HUMAN_REVIEW') {
+    return 'HUMAN_REVIEW'
+  }
+  if (evaluation.recommendation === 'REWORK') {
+    return 'REWORK'
+  }
+  if (evaluation.recommendation === 'CLARIFY') {
     return 'CLARIFY'
   }
 

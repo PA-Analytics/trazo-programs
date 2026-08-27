@@ -11,6 +11,7 @@ import type {
 export interface EvaluateEvidenceDTO {
   missionId: string
   evidence: string
+  courseId?: string
   consumedArtifacts?: Record<string, ImplementationArtifact>
   currentProgress?: ProgressState
   recentInteraction?: MissionInteractionTurn[]
