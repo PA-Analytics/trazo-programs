@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UserProfile, UserProfileSummary } from '../domain/identity'
+import { TrazzSlot } from './TrazzSlot'
+import trazoLogoFull from '../../trazo-logo-full.png'
 
 interface ProfileSwitcherProps {
   profile: UserProfile
@@ -60,43 +62,68 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
     <main className="entry-shell profile-selection-shell" aria-labelledby="profile-selection-title">
       <div className="entry-card entry-card--wide profile-selection-card">
         <header className="profile-selection-intro">
-          <span className="setup-eyebrow">TRAZO · RUTAS GUARDADAS</span>
-          <h1 id="profile-selection-title">¿Quién va a continuar?</h1>
-          <p>Elige el recorrido que quieres retomar. Cada perfil conserva su propio punto en la ruta.</p>
-        </header>
-        {isLoading && <p className="entry-loading">Cargando perfiles…</p>}
-        {error && <p className="setup-error" role="alert">{error}</p>}
-        {!isLoading && !error && (
-          <div className="profile-selection-list" role="list" aria-label="Perfiles guardados">
-            {profiles.map((item, index) => (
-              <button
-                type="button"
-                className="profile-selection-item"
-                data-active={item.userId === activeProfileId}
-                key={item.userId}
-                onClick={() => onSelect(item.userId)}
-              >
-                <span className="profile-selection-item__waypoint" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="profile-selection-item__identity">
-                  <strong>{item.displayName}</strong>
-                  <small>{roleLabel(item.role)} · recorrido guardado</small>
-                </span>
-                {item.userId === activeProfileId && <span className="profile-selection-item__current">Ruta actual</span>}
-                <span className="profile-selection-item__arrow" aria-hidden="true">→</span>
-              </button>
-            ))}
+          <div className="profile-selection-brand">
+            <img className="profile-selection-brand__logo" src={trazoLogoFull} alt="TRAZO" />
           </div>
-        )}
-        <div className="profile-selection-actions">
-          <button type="button" className="setup-primary" onClick={onCreate}>
-            Crear otro perfil
-          </button>
-          <button type="button" className="setup-secondary" onClick={onClose}>
-            Volver al recorrido
-          </button>
-        </div>
+          <span className="setup-eyebrow">RUTAS GUARDADAS</span>
+          <h1 id="profile-selection-title">
+            <span>¿QUIÉN</span>
+            <span>SIGUE</span>
+            <span>LA RUTA?</span>
+          </h1>
+          <p>Vuelve al punto donde lo dejaste.</p>
+          <TrazzSlot />
+        </header>
+        <section className="profile-selection-routes" aria-labelledby="profile-selection-routes-title">
+          <header className="profile-selection-routes__header">
+            <span className="profile-selection-routes__index">01 / IDENTIDAD</span>
+            <h2 id="profile-selection-routes-title">Elige tu punto de partida</h2>
+          </header>
+          {isLoading && <p className="entry-loading">Cargando perfiles…</p>}
+          {error && <p className="setup-error" role="alert">{error}</p>}
+          {!isLoading && !error && profiles.length === 0 && (
+            <p className="profile-selection-empty">Todavía no hay perfiles guardados.</p>
+          )}
+          {!isLoading && !error && profiles.length > 0 && (
+            <ul className="profile-selection-list" aria-label="Perfiles guardados">
+              {profiles.map((item, index) => {
+                const isActive = item.userId === activeProfileId
+                return (
+                  <li key={item.userId}>
+                    <button
+                      type="button"
+                      className="profile-selection-item"
+                      data-active={isActive}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => onSelect(item.userId)}
+                    >
+                      <span className="profile-selection-item__waypoint" aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className="profile-selection-item__identity">
+                        <strong>{item.displayName}</strong>
+                        <small>{roleLabel(item.role)}</small>
+                      </span>
+                      {isActive && <span className="profile-selection-item__current">Perfil activo</span>}
+                      <span className="profile-selection-item__arrow">
+                        <span>{isActive ? 'Continuar' : 'Retomar'}</span>
+                        <span aria-hidden="true">→</span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <div className="profile-selection-actions">
+            <button type="button" className="setup-primary" onClick={onCreate}>
+              Crear otro perfil
+            </button>
+            <button type="button" className="setup-secondary" onClick={onClose}>
+              Volver al recorrido
+            </button>
+          </div>
+        </section>
       </div>
     </main>
   )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { UserProfile, UserRole } from '../domain/identity'
 import { ProductRouteFrame } from './ProductRouteFrame'
+import { TrazzSlot } from './TrazzSlot'
 
 interface RoleGatewayProps {
   profile: UserProfile
@@ -44,6 +45,9 @@ export function RoleGateway({ profile, onComplete }: RoleGatewayProps) {
           <h1 id="role-title">Elige tu ruta.</h1>
           <p>Las dos parten de la misma metodología, pero cambian lo que haces dentro del sistema.</p>
         </header>
+        <div className="role-branch__wayfinder">
+          <TrazzSlot />
+        </div>
         <div className="role-branch__origin">
           <span aria-hidden="true">01</span>
           <div><strong>Identidad</strong><small>{profile.displayName}</small></div>

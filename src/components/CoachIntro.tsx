@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { UserProfile } from '../domain/identity'
 import type { CalibrationMode, CoachSubmissionType } from '../domain/identity'
 import { ProductRouteFrame } from './ProductRouteFrame'
+import { TrazzSlot } from './TrazzSlot'
 
 interface CoachIntroProps {
   profile: UserProfile
@@ -67,6 +68,9 @@ export function CoachIntro({ profile, onComplete }: CoachIntroProps) {
         <span className="setup-eyebrow">TRAZO · MODO COACH</span>
         <h1 id="coach-entry-title">Configura cómo se juzga el trabajo.</h1>
         <p>Vas a describir el resultado, la evidencia y el criterio antes de juzgar ejemplos reales.</p>
+        <div className="coach-entry-header__wayfinder">
+          <TrazzSlot />
+        </div>
       </header>
       <section className="coach-system" aria-labelledby="coach-entry-title">
         <section className="coach-system__step" data-step="01">

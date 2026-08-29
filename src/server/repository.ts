@@ -796,16 +796,48 @@ export class MemoryCalibrationRepository implements ICalibrationRepository {
 }
 
 /**
- * Resolves the configured storage backend explicitly without silent fallback
+ * Resolves the configured storage backend explicitly without silent fallback.
+ * In production (NODE_ENV=production), fails closed: requires explicit STORAGE_BACKEND=firestore
+ * and rejects non-Firestore configurations as well as FIRESTORE_EMULATOR_HOST.
  */
-export function getStorageBackendType(): StorageBackendType {
-  const explicit = process.env.STORAGE_BACKEND?.toLowerCase() as StorageBackendType
-  if (explicit === 'firestore' || explicit === 'filestorage' || explicit === 'memory') {
-    return explicit
+export function getStorageBackendType(backendType?: StorageBackendType): StorageBackendType {
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (isProduction) {
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+      throw new Error('Production environment cannot use FIRESTORE_EMULATOR_HOST')
+    }
+    const envRaw = process.env.STORAGE_BACKEND
+    const envNormalized = envRaw?.trim().toLowerCase()
+    if (envNormalized !== 'firestore') {
+      throw new Error(
+        `Production environment requires explicit STORAGE_BACKEND=firestore (received ${
+          envRaw ? `'${envRaw}'` : 'undefined'
+        })`,
+      )
+    }
+    if (backendType !== undefined) {
+      const argNormalized = backendType.trim().toLowerCase()
+      if (argNormalized !== 'firestore') {
+        throw new Error(
+          `Production environment requires explicit STORAGE_BACKEND=firestore (received '${backendType}')`,
+        )
+      }
+    }
+    return 'firestore'
   }
+
+  const raw = backendType ?? process.env.STORAGE_BACKEND
+  const normalized = raw?.trim().toLowerCase() as StorageBackendType | undefined
+
+  if (normalized === 'firestore' || normalized === 'filestorage' || normalized === 'memory') {
+    return normalized
+  }
+
   if (process.env.USE_FIRESTORE === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
     return 'firestore'
   }
+
   return 'filestorage'
 }
 
@@ -814,7 +846,7 @@ export function getStorageBackendType(): StorageBackendType {
  * Fails explicitly if the requested backend cannot be instantiated.
  */
 export function createImplementationRepository(backendType?: StorageBackendType): IImplementationRepository {
-  const selected = backendType || getStorageBackendType()
+  const selected = getStorageBackendType(backendType)
 
   if (selected === 'firestore') {
     return new FirestoreImplementationRepository()
@@ -828,21 +860,21 @@ export function createImplementationRepository(backendType?: StorageBackendType)
 }
 
 export function createCalibrationRepository(backendType?: StorageBackendType): ICalibrationRepository {
-  const selected = backendType || getStorageBackendType()
+  const selected = getStorageBackendType(backendType)
   if (selected === 'firestore') return new FirestoreCalibrationRepository()
   if (selected === 'memory') return new MemoryCalibrationRepository()
   return new FileStorageCalibrationRepository()
 }
 
 export function createMethodologyRepository(backendType?: StorageBackendType): IMethodologyRepository {
-  const selected = backendType || getStorageBackendType()
+  const selected = getStorageBackendType(backendType)
   if (selected === 'firestore') return new FirestoreMethodologyRepository()
   if (selected === 'memory') return new MemoryMethodologyRepository()
   return new FileStorageMethodologyRepository()
 }
 
 export function createProfileRepository(backendType?: StorageBackendType): IProfileRepository {
-  const selected = backendType || getStorageBackendType()
+  const selected = getStorageBackendType(backendType)
   if (selected === 'firestore') return new FirestoreProfileRepository()
   if (selected === 'memory') return new MemoryProfileRepository()
   return new FileStorageProfileRepository()
@@ -1025,7 +1057,7 @@ export class MemoryAutonomyAuditRepository implements IAutonomyAuditRepository {
 }
 
 export function createAutonomyAuditRepository(backendType?: StorageBackendType): IAutonomyAuditRepository {
-  const selected = backendType || getStorageBackendType()
+  const selected = getStorageBackendType(backendType)
   if (selected === 'firestore') return new FirestoreAutonomyAuditRepository()
   if (selected === 'memory') return new MemoryAutonomyAuditRepository()
   return new FileStorageAutonomyAuditRepository()

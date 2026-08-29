@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  EvaluationProvenanceRecord,
   ImplementationArtifact,
   Mission,
   MissionEvaluationState,
   MissionInteractionTurn,
   ProgressState,
 } from '../domain/course'
+import { detectFrictionRecovery } from '../domain/learner'
 import { nodeTypeLabels, progressLabels } from '../presentation/labels'
 import { getMissionEvaluationPresentation } from '../presentation/missionEvaluation'
 import { CloseIcon, MissionIcon } from './icons'
@@ -19,6 +21,7 @@ interface MissionPanelProps {
   evidence: string
   interactionHistory: MissionInteractionTurn[]
   evaluationState?: MissionEvaluationState
+  evaluationProvenance?: EvaluationProvenanceRecord[]
   artifacts?: Record<string, ImplementationArtifact>
   artifactLabels?: Record<string, string>
   onClose: () => void
@@ -35,6 +38,7 @@ export function MissionPanel({
   evidence,
   interactionHistory,
   evaluationState,
+  evaluationProvenance,
   artifacts,
   artifactLabels,
   onClose,
@@ -46,6 +50,17 @@ export function MissionPanel({
   const completionNoteRef = useRef<HTMLParagraphElement>(null)
   const closeTimerRef = useRef<number | undefined>(undefined)
   const [closing, setClosing] = useState(false)
+  const [dismissedInterventionId, setDismissedInterventionId] = useState<string | null>(null)
+
+  const frictionRecovery = useMemo(
+    () =>
+      detectFrictionRecovery(
+        evaluationProvenance,
+        mission,
+        progressState === 'completed' ? [mission.id] : [],
+      ),
+    [evaluationProvenance, mission, progressState],
+  )
 
   const isEvaluating = evaluationState?.status === 'evaluating'
   const canInteract = progressState !== 'locked'
@@ -407,6 +422,60 @@ export function MissionPanel({
                 <code>{evaluationState.systemError.debugCode}</code>
               </details>
             )}
+        </section>
+      )}
+
+      {frictionRecovery && dismissedInterventionId !== frictionRecovery.interventionId && (
+        <section
+          className="mission-friction-recovery"
+          aria-labelledby="friction-recovery-heading"
+          data-rework-count={frictionRecovery.reworkCount}
+        >
+          <div className="friction-recovery__header">
+            <span className="friction-recovery__badge">Acompañante · Recuperación</span>
+            <h3 id="friction-recovery-heading">Orientación ante intentos reiterados</h3>
+          </div>
+          <div className="friction-recovery__body">
+            {frictionRecovery.targetCriterion ? (
+              <>
+                <p className="friction-recovery__lead">
+                  Detectamos varios intentos en esta misión. Te sugerimos concentrarte en este criterio:
+                </p>
+                <div className="friction-recovery__criterion">
+                  <strong>{frictionRecovery.targetCriterion.label}</strong>
+                  <p>{frictionRecovery.targetCriterion.description}</p>
+                  {frictionRecovery.targetCriterion.lastRationale && (
+                    <small className="friction-recovery__rationale">
+                      Observación: {frictionRecovery.targetCriterion.lastRationale}
+                    </small>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="friction-recovery__lead">
+                Detectamos varios intentos sin verificar. Revisa los criterios del coach antes de volver a enviar.
+              </p>
+            )}
+          </div>
+          <div className="friction-recovery__actions">
+            <button
+              type="button"
+              className="friction-recovery__retry"
+              onClick={() => {
+                const el = document.getElementById(evidenceFieldId)
+                el?.focus()
+              }}
+            >
+              Ajustar evidencia
+            </button>
+            <button
+              type="button"
+              className="friction-recovery__dismiss"
+              onClick={() => setDismissedInterventionId(frictionRecovery.interventionId)}
+            >
+              Entendido
+            </button>
+          </div>
         </section>
       )}
 

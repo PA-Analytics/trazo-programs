@@ -446,7 +446,8 @@ export function App() {
               : `Acción verificada. ${missionTitle} completada.`,
           )
         } else {
-          // IF NOT PASS: Implementation state is NOT mutated; announce coaching feedback
+          // IF NOT PASS: Implementation state progression is NOT mutated; update provenance and announce feedback
+          setImplementationState(data.state)
           setAnnouncement(
             data.message ||
               data.evaluation?.coachingFeedback ||
@@ -638,6 +639,7 @@ export function App() {
           evidence={evidenceByMissionId[selectedMission.id] ?? ''}
           interactionHistory={interactionHistoryByMissionId[selectedMission.id] ?? []}
           evaluationState={evaluationStateByMissionId[selectedMission.id]}
+          evaluationProvenance={implementationState?.evaluationProvenance}
           artifacts={implementationState?.artifacts}
           artifactLabels={artifactLabels}
           onClose={handleClosePanel}

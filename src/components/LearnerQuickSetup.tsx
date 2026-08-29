@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Course, ImplementationState } from '../domain/course'
 import { ProductRouteFrame } from './ProductRouteFrame'
+import { TrazzSlot } from './TrazzSlot'
 
 interface LearnerQuickSetupProps {
   userId: string
@@ -120,6 +121,9 @@ export function LearnerQuickSetup({
             <h1 id="first-run-route-title">Cargando recorrido…</h1>
             <p>Obteniendo la estructura metodológica del programa.</p>
           </header>
+          <div className="role-branch__wayfinder">
+            <TrazzSlot />
+          </div>
         </section>
       </ProductRouteFrame>
     )
@@ -145,6 +149,9 @@ export function LearnerQuickSetup({
             Partimos de la metodología del coach ({course?.title ?? 'Programa'}), pero tú decides qué estructura se adapta mejor a tu primera entrega.
           </p>
         </header>
+        <div className="role-branch__wayfinder">
+          <TrazzSlot />
+        </div>
 
         <div className="role-branch__origin">
           <span aria-hidden="true">01</span>
