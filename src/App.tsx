@@ -577,7 +577,15 @@ export function App() {
   }
 
   if (!implementationState?.learnerSetup) {
-    return withProfileSwitcher(<LearnerQuickSetup userId={profile.userId} implementationId={implementationId} onComplete={setImplementationState} />)
+    return withProfileSwitcher(
+      <LearnerQuickSetup
+        userId={profile.userId}
+        displayName={profile.displayName}
+        course={course}
+        implementationId={implementationId}
+        onComplete={setImplementationState}
+      />,
+    )
   }
 
   return (
@@ -613,6 +621,7 @@ export function App() {
           onStartMission={handleStartMission}
           onRecommendationChange={setRecommendedMissionId}
           activeMissionId={activeMission?.id}
+          preferredRouteId={implementationState?.learnerSetup?.preferredRouteId}
           isEvaluating={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.status === 'evaluating' : false}
           isVerifiedAction={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.policyVerdict === 'PASS' : false}
         />

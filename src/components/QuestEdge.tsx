@@ -13,6 +13,8 @@ export interface QuestEdgeData extends Record<string, unknown> {
   optional: boolean
   highlighted: boolean
   leadsToMilestone: boolean
+  isCorridor?: boolean
+  isDimmed?: boolean
   via?: MapPosition
 }
 
@@ -74,6 +76,8 @@ export const QuestEdge = memo(function QuestEdge({
       data-optional={data?.optional ?? false}
       data-highlighted={data?.highlighted ?? false}
       data-destination={data?.leadsToMilestone ?? false}
+      data-corridor={data?.isCorridor ?? false}
+      data-dimmed={data?.isDimmed ?? false}
     />
   )
 })

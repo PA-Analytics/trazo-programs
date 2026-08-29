@@ -221,9 +221,10 @@ export type AvailableTime = '15_30_MIN' | '30_60_MIN' | '1_2_HOURS' | 'VARIES'
 export type HelpPreference = 'DIRECT' | 'QUESTIONS' | 'EXAMPLE' | 'ADAPTIVE'
 
 export interface LearnerSetup {
-  goal: string
-  availableTime: AvailableTime
-  helpPreference: HelpPreference
+  goal?: string
+  availableTime?: AvailableTime
+  helpPreference?: HelpPreference
+  preferredRouteId?: string
   updatedAt: string
 }
 

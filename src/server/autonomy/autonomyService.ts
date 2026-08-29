@@ -253,6 +253,7 @@ export class AutonomyService {
               goal: state.learnerSetup.goal,
               availableTime: state.learnerSetup.availableTime,
               helpPreference: state.learnerSetup.helpPreference,
+              preferredRouteId: state.learnerSetup.preferredRouteId,
             }
           : undefined,
         verifiedArtifacts: state.artifacts,

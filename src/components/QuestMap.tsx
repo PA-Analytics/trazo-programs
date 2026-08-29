@@ -24,7 +24,7 @@ import type {
   MissionEvaluationState,
   MissionProgress,
 } from '../domain/course'
-import { deriveEdgeProgress } from '../domain/progression'
+import { deriveCorridor, deriveEdgeProgress } from '../domain/progression'
 import { CompanionAvatar, type CompanionHandle } from './CompanionAvatar'
 import { JunctionNode } from './JunctionNode'
 import { MapControls } from './MapControls'
@@ -47,6 +47,7 @@ interface QuestMapProps {
   onStartMission: (missionId: string) => Promise<void>
   onRecommendationChange: (missionId: string | null) => void
   activeMissionId?: string
+  preferredRouteId?: string
   isEvaluating?: boolean
   isVerifiedAction?: boolean
 }
@@ -125,6 +126,7 @@ function QuestMapCanvas({
   onStartMission,
   onRecommendationChange,
   activeMissionId,
+  preferredRouteId,
   isEvaluating,
   isVerifiedAction,
 }: QuestMapProps) {
@@ -134,6 +136,11 @@ function QuestMapCanvas({
   const [instance, setInstance] = useState<ReactFlowInstance<MapNode, QuestFlowEdge> | null>(null)
   const [hoveredMissionId, setHoveredMissionId] = useState<string | null>(null)
   const [cameraZoom, setCameraZoom] = useState(1)
+
+  const corridor = useMemo(
+    () => deriveCorridor(chapter, preferredRouteId),
+    [chapter, preferredRouteId],
+  )
 
   const activeOrInitialMission =
     chapter.missions.find((m) => m.id === (selectedMissionId || activeMissionId)) ||
@@ -162,26 +169,36 @@ function QuestMapCanvas({
   }, [cameraDuration, instance])
 
   const nodes = useMemo<MapNode[]>(() => {
-    const missionNodes: QuestFlowNode[] = chapter.missions.map((mission) => ({
-      id: mission.id,
-      type: 'quest',
-      position: mission.position,
-      draggable: false,
-      selectable: true,
-      connectable: false,
-      focusable: false,
-      zIndex: 3,
-      data: {
-        mission,
-        progressState: progress[mission.id],
-        evaluationStatus: evaluationStateByMissionId[mission.id]?.status,
-        recommended: mission.id === recommendedMissionId,
-        selected: mission.id === selectedMissionId,
-        lockedReason: lockedReasons[mission.id],
-        onSelect: onMissionSelect,
-        onHover: setHoveredMissionId,
-      },
-    }))
+    const missionNodes: QuestFlowNode[] = chapter.missions.map((mission) => {
+      const isDimmed =
+        corridor.hasBranching &&
+        corridor.dimmedMissionIds.has(mission.id) &&
+        !['completed', 'active', 'submitted'].includes(progress[mission.id])
+      const isCorridor = corridor.corridorMissionIds.has(mission.id)
+
+      return {
+        id: mission.id,
+        type: 'quest',
+        position: mission.position,
+        draggable: false,
+        selectable: true,
+        connectable: false,
+        focusable: false,
+        zIndex: 3,
+        data: {
+          mission,
+          progressState: progress[mission.id],
+          evaluationStatus: evaluationStateByMissionId[mission.id]?.status,
+          recommended: mission.id === recommendedMissionId,
+          selected: mission.id === selectedMissionId,
+          lockedReason: lockedReasons[mission.id],
+          isCorridor,
+          isDimmed,
+          onSelect: onMissionSelect,
+          onHover: setHoveredMissionId,
+        },
+      }
+    })
 
     const junctionNodes: JunctionFlowNode[] = (chapter.junctions ?? []).map(
       (junction) => ({
@@ -220,6 +237,7 @@ function QuestMapCanvas({
     return [...territoryNodes, ...missionNodes, ...junctionNodes]
   }, [
     chapter,
+    corridor,
     evaluationStateByMissionId,
     lockedReasons,
     onMissionSelect,
@@ -245,6 +263,13 @@ function QuestMapCanvas({
               ? 'immediate'
               : 'future'
 
+        const isDimmed =
+          corridor.hasBranching &&
+          corridor.dimmedEdgeIds.has(edge.id) &&
+          progress[edge.source] !== 'completed' &&
+          progress[edge.target] !== 'completed'
+        const isCorridor = corridor.corridorEdgeIds.has(edge.id)
+
         return {
           id: edge.id,
           source: edge.source,
@@ -260,12 +285,14 @@ function QuestMapCanvas({
             highlighted:
               hoveredMissionId === edge.source || hoveredMissionId === edge.target,
             leadsToMilestone: nodeTypeById.get(edge.target) === 'milestone',
+            isCorridor,
+            isDimmed,
             via: edge.via,
           },
         }
       })
     },
-    [chapter.edges, chapter.missions, hoveredMissionId, progress],
+    [chapter.edges, chapter.missions, corridor, hoveredMissionId, progress],
   )
 
   useEffect(() => {

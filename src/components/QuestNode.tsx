@@ -17,6 +17,8 @@ export interface QuestNodeData extends Record<string, unknown> {
   recommended: boolean
   selected: boolean
   lockedReason?: string
+  isCorridor?: boolean
+  isDimmed?: boolean
   onSelect: (missionId: string) => void
   onHover: (missionId: string | null) => void
 }
@@ -31,6 +33,8 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
     recommended,
     selected,
     lockedReason,
+    isCorridor,
+    isDimmed,
     onSelect,
     onHover,
   } = data
@@ -60,6 +64,8 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
       data-evaluation={evaluationStatus ?? 'idle'}
       data-recommended={recommended}
       data-selected={selected}
+      data-corridor={isCorridor ?? false}
+      data-dimmed={isDimmed ?? false}
       data-detail={detailLevel}
       data-role={mission.mapRole}
       onPointerEnter={() => onHover(mission.id)}

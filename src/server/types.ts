@@ -87,9 +87,10 @@ export interface NextActionRequestDTO {
 }
 
 export interface LearnerSetupDTO {
-  goal: string
-  availableTime: AvailableTime
-  helpPreference: HelpPreference
+  goal?: string
+  availableTime?: AvailableTime
+  helpPreference?: HelpPreference
+  preferredRouteId?: string
 }
 
 export interface CreateCalibrationDTO {

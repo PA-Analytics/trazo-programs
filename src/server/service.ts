@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto'
 import { adaptCompanionGuidance } from '../domain/learner.ts'
 import type {
   ArtifactProductionSpec,
+  Chapter,
   EvaluationProvenanceRecord,
   ImplementationArtifact,
   ImplementationState,
@@ -193,22 +194,78 @@ export class ImplementationService {
     })
   }
 
+  private getValidRouteIdsForChapter(chapter: Chapter): Set<string> {
+    const outgoingBySource = new Map<string, string[]>()
+    for (const edge of chapter.edges) {
+      const list = outgoingBySource.get(edge.source) ?? []
+      list.push(edge.target)
+      outgoingBySource.set(edge.source, list)
+    }
+
+    const forks = [...outgoingBySource.entries()].filter(([, targets]) => targets.length > 1)
+    if (forks.length > 0) {
+      const branchTargets = new Set<string>()
+      for (const [, targets] of forks) {
+        for (const target of targets) {
+          branchTargets.add(target)
+        }
+      }
+      return branchTargets
+    }
+
+    const firstMission = chapter.missions[0]
+    return firstMission ? new Set([firstMission.id]) : new Set()
+  }
+
   async updateLearnerSetup(implementationId: string, dto: LearnerSetupDTO): Promise<ImplementationState> {
-    const goal = dto.goal?.trim()
-    if (!goal) throw new Error('goal is required')
-    if (!['15_30_MIN', '30_60_MIN', '1_2_HOURS', 'VARIES'].includes(dto.availableTime)) {
+    const goal = typeof dto.goal === 'string' ? dto.goal.trim() : undefined
+    if (dto.goal !== undefined && !goal) {
+      throw new Error('goal cannot be empty')
+    }
+
+    if (dto.availableTime !== undefined && !['15_30_MIN', '30_60_MIN', '1_2_HOURS', 'VARIES'].includes(dto.availableTime)) {
       throw new Error('availableTime is invalid')
     }
-    if (!['DIRECT', 'QUESTIONS', 'EXAMPLE', 'ADAPTIVE'].includes(dto.helpPreference)) {
+
+    if (dto.helpPreference !== undefined && !['DIRECT', 'QUESTIONS', 'EXAMPLE', 'ADAPTIVE'].includes(dto.helpPreference)) {
       throw new Error('helpPreference is invalid')
     }
+
+    const preferredRouteId = typeof dto.preferredRouteId === 'string' ? dto.preferredRouteId.trim() : undefined
+    if (dto.preferredRouteId !== undefined && !preferredRouteId) {
+      throw new Error('preferredRouteId cannot be empty')
+    }
+
+    if (!goal && !dto.availableTime && !dto.helpPreference && !preferredRouteId) {
+      throw new Error('at least one setup field is required')
+    }
+
     return this.runExclusive(implementationId, async () => {
       const state = await this.repository.getById(implementationId)
       if (!state) throw new Error(`Implementation '${implementationId}' not found`)
+
+      if (preferredRouteId !== undefined) {
+        const { course } = await this.getWorkflowContext(state)
+        const chapter = course.chapters[0]
+        if (!chapter) {
+          throw new Error(`No chapters found in course '${state.courseId}'`)
+        }
+
+        const validRouteIds = this.getValidRouteIdsForChapter(chapter)
+        if (!validRouteIds.has(preferredRouteId)) {
+          throw new Error(
+            `preferredRouteId '${preferredRouteId}' is not a valid route option for course '${state.courseId}'. Valid options: [${[...validRouteIds].join(', ')}]`,
+          )
+        }
+      }
+
+      const existingSetup = state.learnerSetup
       state.learnerSetup = {
-        goal: goal.slice(0, 300),
-        availableTime: dto.availableTime,
-        helpPreference: dto.helpPreference,
+        ...(existingSetup ?? {}),
+        ...(goal !== undefined ? { goal: goal.slice(0, 300) } : {}),
+        ...(dto.availableTime !== undefined ? { availableTime: dto.availableTime } : {}),
+        ...(dto.helpPreference !== undefined ? { helpPreference: dto.helpPreference } : {}),
+        ...(preferredRouteId !== undefined ? { preferredRouteId: preferredRouteId.slice(0, 80) } : {}),
         updatedAt: new Date().toISOString(),
       }
       state.updatedAt = new Date().toISOString()

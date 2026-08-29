@@ -2737,6 +2737,41 @@ textarea:focus-visible {
   opacity: 0.62;
 }
 
+.quest-node-shell[data-dimmed="true"] {
+  opacity: 0.38;
+  filter: grayscale(0.35);
+  transition: opacity 250ms ease, filter 250ms ease;
+}
+
+.quest-node-shell[data-dimmed="true"]:hover,
+.quest-node-shell[data-dimmed="true"]:focus-within {
+  opacity: 0.95;
+  filter: none;
+}
+
+.quest-node-shell[data-corridor="true"]:not([data-progress="completed"]) .quest-node-shape {
+  box-shadow: 0 0 0 2px var(--trazo-indigo-soft);
+}
+
+.react-flow__edge-path.quest-edge-path[data-corridor="true"] {
+  stroke: var(--trazo-indigo);
+  stroke-width: 3.2px;
+  stroke-dasharray: 5 6;
+  opacity: 1;
+}
+
+.react-flow__edge-path.quest-edge-path[data-dimmed="true"] {
+  opacity: 0.22;
+  stroke-width: 1.5px;
+  stroke-dasharray: 3 6;
+  transition: opacity 250ms ease, stroke-width 250ms ease;
+}
+
+.react-flow__edge-path.quest-edge-path[data-dimmed="true"][data-highlighted="true"] {
+  opacity: 0.85;
+  stroke-width: 3px;
+}
+
 .mission-panel {
   color: var(--trazo-ink);
   background: var(--trazo-paper);

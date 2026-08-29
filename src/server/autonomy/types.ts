@@ -89,9 +89,10 @@ export interface AutonomyReasonerContext {
   }>
   completedMissionIds: string[]
   learnerSetup?: {
-    goal: string
-    availableTime: string
-    helpPreference: string
+    goal?: string
+    availableTime?: string
+    helpPreference?: string
+    preferredRouteId?: string
   }
   verifiedArtifacts?: Record<string, unknown>
   consequentialMemory?: ConsequentialLearnerMemory[]

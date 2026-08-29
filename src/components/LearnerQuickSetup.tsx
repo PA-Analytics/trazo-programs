@@ -1,212 +1,209 @@
 import { useState } from 'react'
-import type { AvailableTime, HelpPreference, ImplementationState } from '../domain/course'
+import type { Course, ImplementationState } from '../domain/course'
+import { ProductRouteFrame } from './ProductRouteFrame'
 
 interface LearnerQuickSetupProps {
   userId: string
+  displayName?: string
   implementationId: string
+  course?: Course
   onComplete: (state: ImplementationState) => void
 }
 
-const goals: Array<{ value: string; label: string; detail: string }> = [
-  {
-    value: 'Publicar mi primera pieza estratégica',
-    label: 'Publicar mi primera pieza estratégica',
-    detail: 'Tener una publicación terminada, validada y lista para salir.',
-  },
-  {
-    value: 'Validar una idea con una señal real',
-    label: 'Validar una idea con una señal real',
-    detail: 'Comprobar tracción con feedback concreto antes de construir más.',
-  },
-  {
-    value: 'Construir un sistema de contenido repetible',
-    label: 'Construir un sistema de contenido repetible',
-    detail: 'Establecer una rutina sostenible y estructurada de producción.',
-  },
-]
+interface RouteOption {
+  id: string
+  index: string
+  title: string
+  detail: string
+}
 
-const timeOptions: Array<{ value: AvailableTime; label: string; detail: string }> = [
-  { value: '15_30_MIN', label: '15–30 min', detail: 'Bloques rápidos de enfoque directo' },
-  { value: '30_60_MIN', label: '30–60 min', detail: 'Ritmo estándar para una misión' },
-  { value: '1_2_HOURS', label: '1–2 horas', detail: 'Sesiones profundas de desarrollo' },
-  { value: 'VARIES', label: 'Varía mucho', detail: 'Horarios flexibles según mi semana' },
-]
+function resolveBranchOptions(course?: Course): RouteOption[] {
+  const chapter = course?.chapters[0]
+  if (!chapter) {
+    return []
+  }
 
-const helpOptions: Array<{ value: HelpPreference; label: string; detail: string }> = [
-  { value: 'DIRECT', label: 'Dímelo directo', detail: 'Señala qué falta sin rodeos ni preámbulos.' },
-  { value: 'QUESTIONS', label: 'Hazme preguntas', detail: 'Ayúdame a descubrirlo por mí mismo con preguntas guía.' },
-  { value: 'EXAMPLE', label: 'Muéstrame un ejemplo', detail: 'Aterrízalo con un caso o referencia concreta similar.' },
-  { value: 'ADAPTIVE', label: 'Depende, tú decide', detail: 'Elige la ayuda que convenga según la complejidad del reto.' },
-]
+  // Detect branch targets from forks in chapter 1
+  const outgoingBySource = new Map<string, string[]>()
+  for (const edge of chapter.edges) {
+    const list = outgoingBySource.get(edge.source) ?? []
+    list.push(edge.target)
+    outgoingBySource.set(edge.source, list)
+  }
 
-const stepMeta = [
-  { label: '01 · Tu meta', title: '¿Qué quieres conseguir con este programa?', hint: 'Elige el resultado principal que orientará tus misiones.' },
-  { label: '02 · Tu tiempo', title: 'Cuando trabajas en el programa, ¿cuánto tiempo sueles tener?', hint: 'Lo guardaré como contexto para futuras recomendaciones; no cambia el estándar ni desbloquea misiones.' },
-  { label: '03 · Modo de ayuda', title: 'Cuando te atoras, ¿cómo prefieres que te ayude TRAZO?', hint: 'Ajusta el estilo de coaching que recibirás en tus revisiones de evidencia.' },
-]
+  const fork = [...outgoingBySource.entries()].find(([, targets]) => targets.length > 1)
+  if (fork) {
+    const [, targets] = fork
+    const missionById = new Map(chapter.missions.map((m) => [m.id, m]))
+    const branchLetters = ['A', 'B', 'C', 'D']
 
-export function LearnerQuickSetup({ userId, implementationId, onComplete }: LearnerQuickSetupProps) {
-  const [step, setStep] = useState(0)
-  const [goal, setGoal] = useState('')
-  const [availableTime, setAvailableTime] = useState<AvailableTime | ''>('')
-  const [helpPreference, setHelpPreference] = useState<HelpPreference | ''>('')
+    return targets
+      .map((targetId, idx) => {
+        const mission = missionById.get(targetId)
+        if (!mission) return null
+        const letter = branchLetters[idx] ?? String(idx + 1)
+
+        return {
+          id: targetId,
+          index: `03${letter}`,
+          title: mission.title,
+          detail: mission.description || mission.mapSubtitle || 'Ruta de entrega del programa.',
+        }
+      })
+      .filter((opt): opt is RouteOption => opt !== null)
+  }
+
+  // Linear pack fallback
+  const firstMission = chapter.missions[0]
+  if (!firstMission) return []
+
+  return [
+    {
+      id: firstMission.id,
+      index: '03',
+      title: course.title,
+      detail: chapter.mapPromise ?? firstMission.description ?? 'Recorrido estándar del programa.',
+    },
+  ]
+}
+
+export function LearnerQuickSetup({
+  userId,
+  displayName = 'Alumno',
+  implementationId,
+  course,
+  onComplete,
+}: LearnerQuickSetupProps) {
+  const options = resolveBranchOptions(course)
+  const [selectedRouteId, setSelectedRouteId] = useState<string>(options[0]?.id ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function finish() {
-    if (!goal || !availableTime || !helpPreference) return
+  // Keep selection synchronized when options load
+  const effectiveRouteId = selectedRouteId || options[0]?.id || ''
+
+  async function confirmRoute() {
+    if (!effectiveRouteId) return
     setIsSaving(true)
     setError(null)
     try {
       const response = await fetch(`/api/v1/implementations/${encodeURIComponent(implementationId)}/learner-setup`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-Trazo-User-Id': userId },
-        body: JSON.stringify({ goal, availableTime, helpPreference }),
+        body: JSON.stringify({
+          preferredRouteId: effectiveRouteId,
+        }),
       })
-      if (!response.ok) throw new Error('No se pudo guardar tu contexto.')
+      if (!response.ok) throw new Error('No se pudo guardar tu preferencia de ruta.')
       onComplete((await response.json()) as ImplementationState)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudo guardar tu contexto.')
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar tu preferencia de ruta.')
     } finally {
       setIsSaving(false)
     }
   }
 
-  const canContinue = step === 0 ? Boolean(goal) : step === 1 ? Boolean(availableTime) : Boolean(helpPreference)
+  if (options.length === 0) {
+    return (
+      <ProductRouteFrame
+        variant="branch"
+        stages={[
+          { label: 'Identidad', state: 'complete' },
+          { label: 'Rol: Alumno', state: 'complete' },
+          { label: 'Enfoque de ruta', state: 'current' },
+          { label: 'Mapa y misiones', state: 'future' },
+        ]}
+      >
+        <section className="role-branch learner-route-setup" aria-labelledby="first-run-route-title">
+          <header className="role-branch__header">
+            <span className="setup-eyebrow">TRAZO · {displayName}</span>
+            <h1 id="first-run-route-title">Cargando recorrido…</h1>
+            <p>Obteniendo la estructura metodológica del programa.</p>
+          </header>
+        </section>
+      </ProductRouteFrame>
+    )
+  }
+
+  const activeOption = options.find((opt) => opt.id === effectiveRouteId) ?? options[0]
 
   return (
-    <main className="setup-shell" aria-labelledby="setup-title">
-      <div className="setup-intro">
-        <span className="setup-eyebrow">TRAZO · Configuración de Acompañamiento</span>
-        <h1 id="setup-title">Cuéntame cómo quieres recorrerlo.</h1>
-        <p>Son tres decisiones rápidas. No cambian el estándar de tus misiones; me ayudan a acompañarte mejor.</p>
-      </div>
+    <ProductRouteFrame
+      variant="branch"
+      stages={[
+        { label: 'Identidad', state: 'complete' },
+        { label: 'Rol: Alumno', state: 'complete' },
+        { label: 'Enfoque de ruta', state: 'current' },
+        { label: 'Mapa y misiones', state: 'future' },
+      ]}
+    >
+      <section className="role-branch learner-route-setup" aria-labelledby="first-run-route-title">
+        <header className="role-branch__header">
+          <span className="setup-eyebrow">TRAZO · {displayName}</span>
+          <h1 id="first-run-route-title">Elige el enfoque de tu recorrido.</h1>
+          <p>
+            Partimos de la metodología del coach ({course?.title ?? 'Programa'}), pero tú decides qué estructura se adapta mejor a tu primera entrega.
+          </p>
+        </header>
 
-      <div
-        className="setup-progress"
-        role="progressbar"
-        aria-valuenow={step + 1}
-        aria-valuemin={1}
-        aria-valuemax={3}
-        aria-label={`Paso ${step + 1} de 3: ${stepMeta[step].label}`}
-      >
-        <div className="setup-progress__header">
-          <span className="setup-progress__step-badge">{stepMeta[step].label}</span>
-          <span className="setup-progress__counter">{String(step + 1).padStart(2, '0')} / 03</span>
+        <div className="role-branch__origin">
+          <span aria-hidden="true">01</span>
+          <div>
+            <strong>Punto de partida · {course?.chapters[0]?.missions[0]?.title ?? 'Premisa'}</strong>
+            <small>Comenzarás definiendo tu idea central; después la ruta se abrirá según tu elección.</small>
+          </div>
         </div>
-        <div className="setup-progress__track">
-          <div className="setup-progress__fill" style={{ width: `${((step + 1) / 3) * 100}%` }} />
+
+        <div className="role-choice-list" role="radiogroup" aria-label="Opciones de enfoque metodológico">
+          {options.map((option) => {
+            const isSelected = effectiveRouteId === option.id
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className="role-choice learner-route-choice"
+                data-selected={isSelected}
+                data-route={option.id}
+                disabled={isSaving}
+                onClick={() => setSelectedRouteId(option.id)}
+                aria-checked={isSelected}
+                role="radio"
+              >
+                <span className="role-choice__index">{option.index}</span>
+                <span className="role-choice__body">
+                  <strong>{option.title}</strong>
+                  <small>{option.detail}</small>
+                </span>
+                <span className="role-choice__selector" aria-hidden="true">
+                  {isSelected ? '●' : '○'}
+                </span>
+              </button>
+            )
+          })}
         </div>
-      </div>
 
-      <section className="setup-question" aria-live="polite">
-        {step === 0 && (
-          <fieldset>
-            <legend>{stepMeta[0].title}</legend>
-            <p className="setup-hint">{stepMeta[0].hint}</p>
-            <div className="setup-choice-list" role="radiogroup" aria-label={stepMeta[0].title}>
-              {goals.map((option) => (
-                <label className="setup-choice setup-choice--stacked" key={option.value} data-selected={goal === option.value}>
-                  <input
-                    type="radio"
-                    name="goal"
-                    value={option.value}
-                    checked={goal === option.value}
-                    onChange={() => setGoal(option.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && goal === option.value) {
-                        setStep(1)
-                      }
-                    }}
-                  />
-                  <span className="setup-choice__marker" aria-hidden="true" />
-                  <span className="setup-choice__content">
-                    <strong className="setup-choice__title">{option.label}</strong>
-                    <small className="setup-choice__detail">{option.detail}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+        {activeOption && (
+          <div className="learner-route-corridor-preview" aria-live="polite">
+            <span className="corridor-preview-tag">Ruta seleccionada</span>
+            <p>
+              Tu mapa iluminará el corredor de <strong>{activeOption.title}</strong>. La otra alternativa seguirá disponible si decides cambiar de camino más adelante.
+            </p>
+          </div>
         )}
 
-        {step === 1 && (
-          <fieldset>
-            <legend>{stepMeta[1].title}</legend>
-            <p className="setup-hint">{stepMeta[1].hint}</p>
-            <div className="setup-choice-grid" role="radiogroup" aria-label={stepMeta[1].title}>
-              {timeOptions.map((option) => (
-                <label className="setup-choice setup-choice--grid-item" key={option.value} data-selected={availableTime === option.value}>
-                  <input
-                    type="radio"
-                    name="available-time"
-                    value={option.value}
-                    checked={availableTime === option.value}
-                    onChange={() => setAvailableTime(option.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && availableTime === option.value) {
-                        setStep(2)
-                      }
-                    }}
-                  />
-                  <span className="setup-choice__marker" aria-hidden="true" />
-                  <span className="setup-choice__content">
-                    <strong className="setup-choice__title">{option.label}</strong>
-                    <small className="setup-choice__detail">{option.detail}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
+        {error && <p className="setup-error" role="alert">{error}</p>}
 
-        {step === 2 && (
-          <fieldset>
-            <legend>{stepMeta[2].title}</legend>
-            <p className="setup-hint">{stepMeta[2].hint}</p>
-            <div className="setup-choice-list" role="radiogroup" aria-label={stepMeta[2].title}>
-              {helpOptions.map((option) => (
-                <label className="setup-choice setup-choice--stacked" key={option.value} data-selected={helpPreference === option.value}>
-                  <input
-                    type="radio"
-                    name="help-preference"
-                    value={option.value}
-                    checked={helpPreference === option.value}
-                    onChange={() => setHelpPreference(option.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && helpPreference === option.value) {
-                        void finish()
-                      }
-                    }}
-                  />
-                  <span className="setup-choice__marker" aria-hidden="true" />
-                  <span className="setup-choice__content">
-                    <strong className="setup-choice__title">{option.label}</strong>
-                    <small className="setup-choice__detail">{option.detail}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
-      </section>
-
-      {error && <p className="setup-error" role="alert">{error}</p>}
-      <div className="setup-actions">
-        {step > 0 && (
-          <button type="button" className="setup-back" onClick={() => setStep((current) => current - 1)}>
-            ← Atrás
+        <div className="learner-route-actions">
+          <button
+            type="button"
+            className="setup-primary entry-submit"
+            disabled={!effectiveRouteId || isSaving}
+            onClick={() => void confirmRoute()}
+          >
+            {isSaving ? 'Configurando mapa…' : 'Comenzar mi recorrido →'}
           </button>
-        )}
-        <button
-          type="button"
-          className="setup-primary"
-          disabled={!canContinue || isSaving}
-          onClick={() => (step < 2 ? setStep((current) => current + 1) : void finish())}
-        >
-          {isSaving ? 'Guardando preferencias…' : step < 2 ? 'Siguiente →' : 'Comenzar recorrido →'}
-        </button>
-      </div>
-    </main>
+        </div>
+      </section>
+    </ProductRouteFrame>
   )
 }

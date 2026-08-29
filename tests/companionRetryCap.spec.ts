@@ -35,12 +35,14 @@ test.describe('companion next-action retry cap', () => {
 
   test('explicit learner retry after failure issues a new request', async ({ page }) => {
     let nextActionRequests = 0
+    const retryUserId = 'user-retry-profile'
+    const retryImplId = 'impl-retry-profile'
 
     await page.route('**/api/**', async (route) => {
       await route.fulfill({ json: null })
     })
-    await mockLearnerQuestMap(page)
-    await page.route(`**/api/v1/implementations/${implementationId}/next-action`, async (route) => {
+    await mockLearnerQuestMap(page, retryUserId, retryImplId)
+    await page.route(`**/api/v1/implementations/${retryImplId}/next-action`, async (route) => {
       nextActionRequests += 1
       if (nextActionRequests === 1) {
         await route.abort('failed')
@@ -66,18 +68,22 @@ test.describe('companion next-action retry cap', () => {
   })
 })
 
-async function mockLearnerQuestMap(page: Page) {
+async function mockLearnerQuestMap(
+  page: Page,
+  userId: string = 'user-active-profile',
+  targetImplId: string = implementationId,
+) {
   const learner = {
-    userId: 'user-active-profile',
+    userId,
     displayName: 'Euge',
     role: 'learner',
     createdAt: timestamp,
     updatedAt: timestamp,
-    learnerImplementationId: implementationId,
+    learnerImplementationId: targetImplId,
   }
 
-  await page.addInitScript((userId) => {
-    localStorage.setItem('trazo_active_user_id', userId)
+  await page.addInitScript((uid) => {
+    localStorage.setItem('trazo_active_user_id', uid)
   }, learner.userId)
 
   await page.route('**/api/v1/profiles', async (route) => {
@@ -88,10 +94,17 @@ async function mockLearnerQuestMap(page: Page) {
   })
   // N01 completed => N02 + N03 available => availableMissions.length > 1 =>
   // companion auto-fetch condition armed.
-  await page.route(`**/api/v1/implementations/${implementationId}`, async (route) => {
+  await page.route(`**/api/v1/implementations/${targetImplId}/methodology`, async (route) => {
     await route.fulfill({
       json: {
-        id: implementationId,
+        progress: { N01: 'completed', N02: 'available', N03: 'available' },
+      },
+    })
+  })
+  await page.route(`**/api/v1/implementations/${targetImplId}`, async (route) => {
+    await route.fulfill({
+      json: {
+        id: targetImplId,
         userId: learner.userId,
         courseId,
         courseVersion: '1.0.0',
