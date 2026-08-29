@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { UserProfile, UserProfileSummary } from '../domain/identity'
-import { TrazzSlot } from './TrazzSlot'
+import { ProfileReturnRoute } from './ProfileReturnRoute'
 import trazoLogoFull from '../../trazo-logo-full.png'
 
 interface ProfileSwitcherProps {
@@ -72,7 +72,7 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
             <span>LA RUTA?</span>
           </h1>
           <p>Vuelve al punto donde lo dejaste.</p>
-          <TrazzSlot />
+          <ProfileReturnRoute />
         </header>
         <section className="profile-selection-routes" aria-labelledby="profile-selection-routes-title">
           <header className="profile-selection-routes__header">

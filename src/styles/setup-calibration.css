@@ -502,6 +502,38 @@ legend {
   color: var(--trazo-paper);
 }
 
+.profile-return-route {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  min-height: 160px;
+  margin-top: clamp(16px, 2.5vh, 24px);
+  overflow: hidden;
+}
+
+.profile-return-route__image {
+  display: block;
+  width: auto;
+  max-width: none;
+  height: 160px;
+  pointer-events: none;
+  transform: translateX(-38px);
+}
+
+@media (max-width: 680px) {
+  .profile-return-route {
+    min-height: 150px;
+    margin-top: 32px;
+  }
+
+  .profile-return-route__image {
+    height: 150px;
+    transform: translateX(-30px);
+  }
+}
+
 .profile-selection-card {
   position: relative;
   display: grid;
@@ -557,13 +589,18 @@ legend {
 
 .profile-selection-intro h1 {
   display: grid;
+  row-gap: clamp(8px, 1.2vw, 16px);
   max-width: 7ch;
   margin: 0;
   color: var(--trazo-paper);
-  font-size: clamp(3.7rem, 7vw, 7.2rem);
+  font-size: clamp(3.7rem, 5.8vw, 6.2rem);
   letter-spacing: -0.045em;
-  line-height: 0.82;
+  line-height: 0.88;
   text-transform: uppercase;
+}
+
+.profile-selection-intro h1 span {
+  margin: 0;
 }
 
 .profile-selection-intro h1 span:last-child {

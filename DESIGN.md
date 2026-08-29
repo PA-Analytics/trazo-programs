@@ -20,6 +20,10 @@ El quest map es el protagonista:
 
 El panel de misión no debe ocupar permanentemente una gran parte del mapa. La información contextual aparece cuando ayuda a decidir o actuar.
 
+## Product composition baseline
+
+La pagina de seleccion de perfiles fija la referencia operativa para las siguientes pestanas de producto: marco tinta/papel, senal cobalto, tipografia display + UI, composicion editorial/decisional, filas accionables, botones y comportamiento responsive. La ficha detallada esta en [`docs/brand/PRODUCT_PROFILE_COMPOSITION.md`](docs/brand/PRODUCT_PROFILE_COMPOSITION.md). Debe reutilizarse la gramatica, no copiarse cada elemento contextual como el personaje o el copy.
+
 ## Core visual grammar
 
 La interfaz debe distinguir al menos:
