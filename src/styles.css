@@ -3620,3 +3620,225 @@ textarea:focus-visible {
   font-size: 0.82rem;
   line-height: 1.4;
 }
+
+/* Trazz llega al waypoint: contacto corto y firme, sin pulso ni aura. */
+.quest-node-shell[data-companion-contact="true"] .quest-node-shape {
+  border-color: var(--trazo-indigo);
+  box-shadow:
+    inset 0 1px 0 rgb(241 241 236 / 0.72),
+    inset 0 -3px 5px rgb(20 26 22 / 0.12),
+    0 0 0 2px rgb(54 87 255 / 0.16);
+  transform: translateY(1px) scale(0.985);
+}
+
+.quest-node-shell[data-companion-contact="true"] .quest-node-depth {
+  background: var(--trazo-indigo);
+  transform: translateY(4px) scale(0.985);
+}
+
+.quest-node-shell[data-companion-contact="true"] .quest-node-frame {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.quest-node--milestone[data-companion-contact="true"] .quest-node-frame {
+  background: var(--trazo-paper-warm);
+  border-color: var(--trazo-indigo);
+}
+
+/* First-run map entry: the existing territory and edges reveal real structure in order. */
+.quest-map[data-entry-locked="true"] .quest-node-button {
+  pointer-events: none;
+}
+
+.quest-map[data-entry-phase="world"] .territory {
+  opacity: 0.34;
+}
+
+.quest-map[data-entry-phase="world"] .quest-edge-path {
+  opacity: 0.14;
+}
+
+.quest-map[data-entry-phase="world"] .quest-node-shell {
+  opacity: 0.06;
+  filter: grayscale(0.65);
+  transform: translateY(8px);
+}
+
+.quest-map[data-entry-phase="corridor"] .territory {
+  opacity: 0.58;
+  transition: opacity 700ms var(--trazo-ease-standard);
+}
+
+.quest-map[data-entry-phase="corridor"] .quest-edge-path {
+  opacity: 0.2;
+}
+
+.quest-map[data-entry-phase="corridor"] .quest-edge-path[data-corridor="true"] {
+  stroke-dasharray: 8 10;
+  stroke-dashoffset: 1200;
+  animation: trazo-map-route-draw 1050ms var(--trazo-ease-standard) forwards;
+}
+
+.quest-map[data-entry-phase="corridor"] .quest-node-shell {
+  opacity: 0.14;
+  filter: grayscale(0.45);
+  transition: opacity 700ms var(--trazo-ease-standard), filter 700ms var(--trazo-ease-standard);
+}
+
+.quest-map[data-entry-phase="corridor"] .quest-node-shell[data-corridor="true"] {
+  opacity: 0.34;
+  filter: none;
+}
+
+.quest-map[data-entry-phase="nodes"] .quest-node-shell {
+  --entry-node-opacity: 0.7;
+  opacity: 0;
+  animation: trazo-map-node-reveal 480ms var(--trazo-ease-standard) forwards;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+.quest-map[data-entry-phase="nodes"] .quest-node-shell[data-corridor="true"] {
+  --entry-node-opacity: 0.96;
+}
+
+.quest-map[data-entry-phase="nodes"] .quest-node-shell[data-dimmed="true"] {
+  --entry-node-opacity: 0.38;
+}
+
+.quest-map[data-entry-phase="focus"] .quest-node-shell[data-entry-focus="true"],
+.quest-map[data-entry-phase="return"] .quest-node-shell[data-entry-focus="true"] {
+  z-index: 8;
+}
+
+.quest-map[data-entry-phase="focus"] .quest-node-shell[data-entry-focus="true"] .quest-node-shape,
+.quest-map[data-entry-phase="return"] .quest-node-shell[data-entry-focus="true"] .quest-node-shape {
+  border-color: var(--trazo-indigo);
+  box-shadow:
+    inset 0 1px 0 rgb(241 241 236 / 0.86),
+    0 4px 0 rgb(54 87 255 / 0.28),
+    0 0 0 4px rgb(54 87 255 / 0.16);
+  transform: scale(1.04);
+}
+
+.quest-map-entry {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 12;
+  display: flex;
+  width: min(360px, calc(100% - 48px));
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px 16px 20px;
+  color: var(--trazo-paper);
+  background: var(--trazo-ink);
+  border: 2px solid var(--trazo-paper);
+  border-radius: 14px 3px 14px 3px;
+  box-shadow: 6px 6px 0 var(--trazo-indigo);
+}
+
+.quest-map-entry__copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  margin: 0;
+}
+
+.quest-map-entry__copy span {
+  color: var(--trazo-indigo-soft);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.quest-map-entry__copy strong {
+  font-family: var(--trazo-font-display);
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.quest-map-entry__copy small {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--trazo-paper) 70%, transparent);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quest-map-entry__skip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 7px 10px;
+  color: var(--trazo-paper);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--trazo-paper) 50%, transparent);
+  border-radius: 3px 10px 3px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.quest-map-entry__skip:hover,
+.quest-map-entry__skip:focus-visible {
+  color: var(--trazo-ink);
+  background: var(--trazo-paper);
+  border-color: var(--trazo-paper);
+}
+
+.quest-map-entry__skip:focus-visible {
+  outline: 3px solid var(--trazo-focus);
+  outline-offset: 3px;
+}
+
+@keyframes trazo-map-route-draw {
+  from { stroke-dashoffset: 1200; opacity: 0.18; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes trazo-map-node-reveal {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: var(--entry-node-opacity, 1); transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 680px) {
+  .quest-map-entry {
+    right: 16px;
+    bottom: 16px;
+    width: min(360px, calc(100% - 32px));
+    padding: 14px;
+  }
+
+  .quest-map-entry__copy strong {
+    font-size: 1.2rem;
+  }
+
+  .quest-map-entry__skip {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quest-map[data-entry-phase="world"] .quest-node-shell,
+  .quest-map[data-entry-phase="corridor"] .quest-node-shell,
+  .quest-map[data-entry-phase="nodes"] .quest-node-shell {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    animation: none;
+  }
+
+  .quest-map[data-entry-phase="world"] .quest-edge-path,
+  .quest-map[data-entry-phase="corridor"] .quest-edge-path {
+    opacity: 1;
+    animation: none;
+  }
+}

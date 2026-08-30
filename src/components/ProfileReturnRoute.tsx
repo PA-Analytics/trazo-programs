@@ -1,4 +1,4 @@
-import trazoThinking from '../../trazo-pensando-derecha.png'
+import trazoThinking from '../assets/mascota-estados/pensando-derecha/pensando-derecha.png'
 
 export function ProfileReturnRoute() {
   return (

@@ -102,7 +102,10 @@ export function App() {
   const [recommendedMissionId, setRecommendedMissionId] = useState<string | null>(null)
   const [recenterRequest, setRecenterRequest] = useState(0)
   const [announcement, setAnnouncement] = useState('')
-  const [showProfileSelection, setShowProfileSelection] = useState(false)
+  const [showLearnerMapEntry, setShowLearnerMapEntry] = useState(false)
+  const [showProfileSelection, setShowProfileSelection] = useState(
+    () => !localStorage.getItem('trazo_active_user_id'),
+  )
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
 
   useEffect(() => {
@@ -118,6 +121,7 @@ export function App() {
         if (response.status === 404) {
           localStorage.removeItem('trazo_active_user_id')
           setActiveUserId('')
+          setShowProfileSelection(true)
           return null
         }
         if (!response.ok) throw new Error('No se pudo cargar tu perfil.')
@@ -148,6 +152,7 @@ export function App() {
     setRecommendedMissionId(null)
     setRecenterRequest(0)
     setAnnouncement('')
+    setShowLearnerMapEntry(false)
     setServerError(null)
   }, [])
 
@@ -178,6 +183,10 @@ export function App() {
   const handleRoleComplete = useCallback((updatedProfile: UserProfile) => {
     setProfile(updatedProfile)
     if (updatedProfile.learnerImplementationId) setImplementationId(updatedProfile.learnerImplementationId)
+  }, [])
+
+  const handleLearnerMapEntryComplete = useCallback(() => {
+    setShowLearnerMapEntry(false)
   }, [])
 
   const withProfileSwitcher = (content: ReactNode) => (
@@ -478,14 +487,10 @@ export function App() {
     ],
   )
 
-  if (!activeUserId) {
-    return <IdentityEntry onComplete={handleIdentityComplete} />
-  }
-
-  if (showProfileSelection && profile) {
+  if (showProfileSelection && (profile || !activeUserId)) {
     return (
       <ProfileSelection
-        activeProfileId={profile.userId}
+        activeProfileId={profile?.userId ?? ''}
         onSelect={handleProfileSelect}
         onCreate={() => {
           setShowProfileSelection(false)
@@ -497,7 +502,19 @@ export function App() {
   }
 
   if (isCreatingProfile) {
-    return <IdentityEntry onComplete={handleIdentityComplete} onCancel={() => setIsCreatingProfile(false)} />
+    return (
+      <IdentityEntry
+        onComplete={handleIdentityComplete}
+        onCancel={() => {
+          setIsCreatingProfile(false)
+          setShowProfileSelection(true)
+        }}
+      />
+    )
+  }
+
+  if (!activeUserId) {
+    return <IdentityEntry onComplete={handleIdentityComplete} />
   }
 
   if (profileLoading) {
@@ -584,7 +601,10 @@ export function App() {
         displayName={profile.displayName}
         course={course}
         implementationId={implementationId}
-        onComplete={setImplementationState}
+        onComplete={(state) => {
+          setImplementationState(state)
+          setShowLearnerMapEntry(true)
+        }}
       />,
     )
   }
@@ -623,6 +643,8 @@ export function App() {
           onRecommendationChange={setRecommendedMissionId}
           activeMissionId={activeMission?.id}
           preferredRouteId={implementationState?.learnerSetup?.preferredRouteId}
+          entrySequence={showLearnerMapEntry}
+          onEntrySequenceComplete={handleLearnerMapEntryComplete}
           isEvaluating={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.status === 'evaluating' : false}
           isVerifiedAction={selectedMissionId ? evaluationStateByMissionId[selectedMissionId]?.policyVerdict === 'PASS' : false}
         />

@@ -33,6 +33,7 @@ export interface CompanionAvatarProps {
   onSelectMission: (missionId: string) => void
   onRecommendationChange: (missionId: string | null) => void
   onTravelStart?: (targetMissionId: string) => void
+  onTravelComplete?: (targetMissionId: string) => void
   isEvaluating?: boolean
   isVerifiedAction?: boolean
   proposalOverride?: NextActionProposal | null
@@ -76,6 +77,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
       onSelectMission,
       onRecommendationChange,
       onTravelStart,
+      onTravelComplete,
       isEvaluating = false,
       isVerifiedAction = false,
       proposalOverride = null,
@@ -126,9 +128,10 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
 
     const handleTravelArrival = useCallback(
       (targetMissionId: string) => {
+        onTravelComplete?.(targetMissionId)
         onSelectMission(targetMissionId)
       },
-      [onSelectMission],
+      [onSelectMission, onTravelComplete],
     )
 
     const { travelAlongPath, teleportTo, cancelTravel } = useCompanionTraveler({
@@ -368,6 +371,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
         data-state={visualState}
         data-direction="SE"
         data-open={isOpen}
+        data-motion-phase="settled"
+        data-contact="settled"
         style={{
           transform: `translate3d(${initialPosition.x}px, ${initialPosition.y}px, 0)`,
           zIndex: Math.floor(initialPosition.y / 10) + 15,

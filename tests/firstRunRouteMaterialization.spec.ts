@@ -99,16 +99,33 @@ test.describe('First-Run Route Materialization E2E Browser Flow', () => {
       preferredRouteId: 'N03',
     })
 
-    // 5. Verify transition to QuestMap with materialized corridor
+    // 5. Verify the explicit setup-to-map boundary
+    await expect(page.getByRole('heading', { name: 'Tu ruta está lista.' })).toBeVisible()
+    await page.getByRole('button', { name: /Entrar al mapa/ }).click()
+
+    // 6. Verify transition to QuestMap with materialized corridor
     await expect(page.locator('.app-shell')).toBeVisible()
     await expect(page.locator('.quest-map-stage, .react-flow')).toBeVisible()
+    const map = page.locator('.quest-map')
+    await expect(map).toHaveAttribute('data-entry-phase', 'world')
+    await expect(map).toHaveAttribute('data-entry-locked', 'true')
+    await expect(page.getByRole('button', { name: /Omitir introducción/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Acercar mapa' })).toBeDisabled()
+    await expect.poll(() => map.getAttribute('data-entry-phase'), { timeout: 1800, interval: 40 }).toBe('corridor')
 
-    // 6. Verify node corridor attributes: N03 is corridor, N02 is dimmed
+    // 7. Verify node corridor attributes: N03 is corridor, N02 is dimmed
     const nodeN03 = page.locator('.quest-node-shell').filter({ hasText: 'Estructura Narrativa' })
     const nodeN02 = page.locator('.quest-node-shell').filter({ hasText: 'Estructura Directa' })
 
     await expect(nodeN03).toHaveAttribute('data-corridor', 'true')
     await expect(nodeN03).toHaveAttribute('data-dimmed', 'false')
     await expect(nodeN02).toHaveAttribute('data-dimmed', 'true')
+
+    await page.getByRole('button', { name: /Omitir introducción/ }).focus()
+    await expect(page.getByRole('button', { name: /Omitir introducción/ })).toBeFocused()
+    await page.getByRole('button', { name: /Omitir introducción/ }).click()
+    await expect(page.getByRole('button', { name: /Omitir introducción/ })).toHaveCount(0)
+    await expect(map).toHaveAttribute('data-entry-locked', 'false')
+    await expect(page.getByRole('button', { name: 'Acercar mapa' })).toBeEnabled()
   })
 })

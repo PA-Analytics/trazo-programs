@@ -12,7 +12,7 @@ interface ProfileSelectionProps {
   activeProfileId: string
   onSelect: (userId: string) => void
   onCreate: () => void
-  onClose: () => void
+  onClose?: () => void
 }
 
 function roleLabel(role: UserProfileSummary['role']) {
@@ -32,7 +32,7 @@ export function ProfileSwitcher({ profile, onOpen }: ProfileSwitcherProps) {
   )
 }
 
-export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose }: ProfileSelectionProps) {
+export function ProfileSelection({ activeProfileId, onSelect, onCreate }: ProfileSelectionProps) {
   const [profiles, setProfiles] = useState<UserProfileSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,11 +74,7 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
           <p>Vuelve al punto donde lo dejaste.</p>
           <ProfileReturnRoute />
         </header>
-        <section className="profile-selection-routes" aria-labelledby="profile-selection-routes-title">
-          <header className="profile-selection-routes__header">
-            <span className="profile-selection-routes__index">01 / IDENTIDAD</span>
-            <h2 id="profile-selection-routes-title">Elige tu punto de partida</h2>
-          </header>
+        <section className="profile-selection-routes" aria-label="Rutas guardadas">
           {isLoading && <p className="entry-loading">Cargando perfiles…</p>}
           {error && <p className="setup-error" role="alert">{error}</p>}
           {!isLoading && !error && profiles.length === 0 && (
@@ -117,10 +113,7 @@ export function ProfileSelection({ activeProfileId, onSelect, onCreate, onClose 
           )}
           <div className="profile-selection-actions">
             <button type="button" className="setup-primary" onClick={onCreate}>
-              Crear otro perfil
-            </button>
-            <button type="button" className="setup-secondary" onClick={onClose}>
-              Volver al recorrido
+              Crear una ruta
             </button>
           </div>
         </section>

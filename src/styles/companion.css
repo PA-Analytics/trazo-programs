@@ -16,6 +16,7 @@
   align-items: center;
   justify-content: center;
   transform-style: preserve-3d;
+  isolation: isolate;
 }
 
 /* Sombra Proyectada Desacoplada en Suelo 2.5D */
@@ -32,8 +33,10 @@
     rgba(20, 26, 22, 0) 72%
   );
   border-radius: 50%;
+  opacity: 0.45;
   pointer-events: none;
-  transition: transform 80ms linear, opacity 80ms linear;
+  z-index: 0;
+  transition: transform 120ms var(--trazo-ease-standard), opacity 120ms ease;
 }
 
 /* Botón interactivo accesible de la mascota */
@@ -49,6 +52,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
+  transform-origin: 50% 88%;
   transition: transform 150ms var(--trazo-ease-standard);
   touch-action: manipulation;
 }
@@ -68,30 +74,30 @@
   transition: transform 90ms ease-out;
 }
 
-/* Anillo exterior para Modo TRAZO / Verified */
+/* Campo de contraste local para apoyar la lectura del cuerpo sobre el mapa. */
 .trazo-companion-halo {
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+  inset: 8px 3px 1px;
+  z-index: 0;
+  border-radius: 48%;
+  background: rgb(20 26 22 / 0.07);
+  filter: blur(4px);
+  opacity: 0.72;
   pointer-events: none;
-  transition: border-color 300ms ease, box-shadow 300ms ease;
+  transform: scale(1.18, 0.72);
+  transition: background-color 250ms ease, opacity 250ms ease, transform 250ms ease;
 }
 
 .trazo-companion-root[data-state="verified"] .trazo-companion-halo {
-  border-color: var(--trazo-action);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--trazo-action) 40%, transparent);
-  animation: trazo-halo-pulse 2s ease-in-out infinite;
-}
-
-@keyframes trazo-halo-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50% { transform: scale(1.08); opacity: 1; }
+  background: rgb(54 87 255 / 0.1);
+  opacity: 0.78;
+  transform: scale(1.22, 0.76);
 }
 
 /* Figura Vectorial de Cartógrafo 2.5D */
 .trazo-companion-figure {
   position: relative;
+  z-index: 1;
   width: 38px;
   height: 38px;
   display: flex;
@@ -328,6 +334,27 @@
 @keyframes trazo-reaction-appear {
   from { opacity: 0; transform: translateY(4px) scale(0.92); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Entrada, recorrido y aterrizaje: una sola secuencia, sin rebote continuo. */
+.trazo-companion-root[data-motion-phase="anticipate"] .trazo-companion-body-btn {
+  transform: translateY(2px) scale(0.97, 0.91);
+}
+
+.trazo-companion-root[data-motion-phase="travel"] .trazo-companion-body-btn,
+.trazo-companion-root[data-motion-phase="settled"] .trazo-companion-body-btn {
+  transform: none;
+}
+
+.trazo-companion-root[data-motion-phase="settle"] .trazo-companion-body-btn {
+  animation: trazo-companion-land 240ms var(--trazo-ease-standard) both;
+}
+
+@keyframes trazo-companion-land {
+  0% { transform: translateY(-0.5px) scale(1.01, 0.98); }
+  42% { transform: translateY(1.5px) scale(0.97, 0.91); }
+  72% { transform: translateY(-0.5px) scale(1.005, 0.995); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 /* Panel Anclado Compacto de Conversación */
@@ -629,6 +656,8 @@
 /* Respeto Estricto a Prefers Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   .trazo-companion-root,
+  .trazo-companion-body-btn,
+  .trazo-companion-shadow,
   .trazo-companion-figure,
   .trazo-figure-antenna,
   .trazo-figure-torso,

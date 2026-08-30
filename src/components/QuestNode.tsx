@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type CSSProperties } from 'react'
 import {
   Handle,
   Position,
@@ -19,6 +19,10 @@ export interface QuestNodeData extends Record<string, unknown> {
   lockedReason?: string
   isCorridor?: boolean
   isDimmed?: boolean
+  companionContact?: boolean
+  entryOrder?: number
+  entryLocked?: boolean
+  entryFocus?: boolean
   onSelect: (missionId: string) => void
   onHover: (missionId: string | null) => void
 }
@@ -35,6 +39,10 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
     lockedReason,
     isCorridor,
     isDimmed,
+    companionContact,
+    entryOrder,
+    entryLocked,
+    entryFocus,
     onSelect,
     onHover,
   } = data
@@ -66,8 +74,12 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
       data-selected={selected}
       data-corridor={isCorridor ?? false}
       data-dimmed={isDimmed ?? false}
+      data-companion-contact={companionContact ?? false}
+      data-entry-order={entryOrder ?? 0}
+      data-entry-focus={entryFocus ?? false}
       data-detail={detailLevel}
       data-role={mission.mapRole}
+      style={{ '--entry-delay': `${Math.min((entryOrder ?? 0) * 90, 720)}ms` } as CSSProperties}
       onPointerEnter={() => onHover(mission.id)}
       onPointerLeave={() => onHover(null)}
     >
@@ -86,6 +98,7 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
         aria-describedby={tooltipId}
         aria-haspopup="dialog"
         aria-expanded={selected}
+        tabIndex={entryLocked ? -1 : 0}
         onClick={() => onSelect(mission.id)}
         onFocus={() => onHover(mission.id)}
         onBlur={() => onHover(null)}

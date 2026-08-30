@@ -103,17 +103,11 @@ The row must remain a real button with keyboard behavior and an accessible name.
 
 ## Buttons and action hierarchy
 
-There are two action levels at the bottom of the right column:
+### Primary action
 
-### Primary text action
+`Crear una ruta` is a solid filled rectangular button with rounded corners: cobalt background (`var(--trazo-indigo)`), paper text (`var(--trazo-paper)`) and standard radius (`var(--trazo-radius-sm)`). It is primary because it initiates a new route.
 
-`Crear otro perfil` is intentionally text-led: transparent background, no filled capsule, paper text and a bottom rule. It is primary because it changes the route, not because it is visually loud.
-
-### Secondary outlined action
-
-`Volver al recorrido` uses a transparent ink-surface treatment with a visible paper border, asymmetric radius and horizontal padding. On hover it inverts toward paper background and ink text.
-
-Both actions keep a minimum touch height of `44px`. Use cobalt for a primary filled button only when the context needs an immediate operational CTA; do not force every action into a filled blue button.
+The action keeps a minimum touch height of `44px`.
 
 ## Companion visual
 

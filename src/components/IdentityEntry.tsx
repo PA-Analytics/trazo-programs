@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import type { UserProfile } from '../domain/identity'
 import { ProductRouteFrame } from './ProductRouteFrame'
-import { TrazzSlot } from './TrazzSlot'
+import trazzPensandoIzquierda from '../assets/mascota-estados/pensando-izquierda/pensando-izquierda.png'
 
 interface IdentityEntryProps {
   onComplete: (profile: UserProfile) => void
@@ -13,9 +13,10 @@ export function IdentityEntry({ onComplete, onCancel }: IdentityEntryProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function submit() {
+  async function submit(event?: FormEvent) {
+    if (event) event.preventDefault()
     const value = displayName.trim()
-    if (!value) return
+    if (!value || isSaving) return
     setIsSaving(true)
     setError(null)
     try {
@@ -33,52 +34,97 @@ export function IdentityEntry({ onComplete, onCancel }: IdentityEntryProps) {
     }
   }
 
+  const trimmedName = displayName.trim()
+
   return (
-    <ProductRouteFrame
-      stages={[
-        { label: 'Identidad', state: 'current' },
-        { label: 'Ruta', state: 'future' },
-        { label: 'Trabajo real', state: 'future' },
-      ]}
-    >
-      <form className="entry-card identity-route" aria-labelledby="identity-title" onSubmit={(event) => { event.preventDefault(); void submit() }}>
-        <header className="identity-route__hero">
-          <span className="setup-eyebrow">TRAZO · PRIMER PASO</span>
-          <h1 id="identity-title">¿Cómo quieres que te llamemos?</h1>
-          <p>Tu nombre ancla el recorrido que vas a demostrar.</p>
-          <TrazzSlot />
-        </header>
-        <div className="identity-route__form-column">
-          <div className="identity-route__start">
-            <span className="identity-route__node" aria-hidden="true">01</span>
-            <div className="identity-route__action">
-              <span className="identity-route__label">Inicio de ruta · Identidad</span>
-              <label className="entry-label" htmlFor="display-name">Tu nombre</label>
+    <ProductRouteFrame variant="identity" hideRail>
+      <form
+        className="identity-ledger"
+        aria-labelledby="identity-title"
+        onSubmit={submit}
+      >
+        <div className="identity-ledger__main">
+          <header className="identity-ledger__header">
+            <span className="setup-eyebrow">TRAZO · PRIMER PASO</span>
+            <h1 id="identity-title" className="identity-ledger__title">
+              ¿CÓMO TE INSCRIBES EN ESTA RUTA?
+            </h1>
+          </header>
+
+          <div className="identity-ledger__body">
+            <div className="identity-ledger__field">
+              <label className="visually-hidden" htmlFor="display-name">
+                Tu nombre o identificador
+              </label>
               <input
                 id="display-name"
-                className="entry-input"
+                className="identity-ledger__input"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Pablo"
+                placeholder="ESCRIBE TU NOMBRE…"
                 autoComplete="name"
                 autoFocus
+                maxLength={40}
+                disabled={isSaving}
               />
-              {error && <p className="setup-error" role="alert">{error}</p>}
-              <button type="submit" className="setup-primary entry-submit" disabled={!displayName.trim() || isSaving}>
-                {isSaving ? 'Guardando…' : 'Continuar →'}
+            </div>
+
+            <div className="identity-ledger__echo" aria-live="polite">
+              {trimmedName ? (
+                <p>
+                  ✦ Se anclarán las evidencias y entregables a nombre de <strong>{trimmedName}</strong>.
+                </p>
+              ) : (
+                <p>
+                  Tu nombre anclará el recorrido y las evidencias que vas a demostrar.
+                </p>
+              )}
+            </div>
+
+            {error && (
+              <p className="setup-error identity-ledger__error" role="alert">
+                {error}
+              </p>
+            )}
+
+            <div className="identity-ledger__actions">
+              <button
+                type="submit"
+                className="setup-primary identity-ledger__submit"
+                disabled={!trimmedName || isSaving}
+              >
+                {isSaving ? 'Inscribiendo…' : 'Continuar →'}
               </button>
+              <span className="identity-ledger__hint" aria-hidden="true">
+                o presiona <strong>Enter ↵</strong>
+              </span>
+
+              {onCancel && (
+                <button
+                  type="button"
+                  className="setup-secondary identity-ledger__cancel"
+                  onClick={onCancel}
+                  disabled={isSaving}
+                >
+                  Volver a perfiles
+                </button>
+              )}
             </div>
           </div>
-          <div className="identity-route__next" aria-hidden="true">
-            <span>02</span>
-            <small>Elige la ruta que vas a recorrer</small>
-          </div>
-          {onCancel && (
-            <button type="button" className="setup-secondary entry-cancel" onClick={onCancel} disabled={isSaving}>
-              Volver a perfiles
-            </button>
-          )}
         </div>
+
+        <aside className="identity-ledger__waypoint-slot" aria-hidden="true">
+          <div className="identity-ledger__waypoint-ground">
+            <img
+              src={trazzPensandoIzquierda}
+              alt=""
+              className="identity-ledger__trazz-avatar"
+            />
+            <div className="identity-ledger__waypoint-disc">
+              <span className="identity-ledger__waypoint-tag">01 · PRIMER PASO</span>
+            </div>
+          </div>
+        </aside>
       </form>
     </ProductRouteFrame>
   )

@@ -50,6 +50,8 @@ interface QuestMapProps {
   preferredRouteId?: string
   isEvaluating?: boolean
   isVerifiedAction?: boolean
+  entrySequence?: boolean
+  onEntrySequenceComplete?: () => void
 }
 
 interface JunctionNodeData extends Record<string, unknown> {
@@ -58,6 +60,17 @@ interface JunctionNodeData extends Record<string, unknown> {
 
 type JunctionFlowNode = Node<JunctionNodeData, 'junction'>
 type MapNode = QuestFlowNode | JunctionFlowNode | TerritoryFlowNode
+
+type MapEntryPhase = 'world' | 'corridor' | 'nodes' | 'focus' | 'expand' | 'return' | 'settled'
+
+const mapEntryCopy: Record<Exclude<MapEntryPhase, 'settled'>, { label: string; title: string }> = {
+  world: { label: 'Territorio', title: 'El mapa se revela.' },
+  corridor: { label: 'Ruta elegida', title: 'Tu corredor toma forma.' },
+  nodes: { label: 'Puntos de acción', title: 'Cada paso ocupa su lugar.' },
+  focus: { label: 'Primer paso', title: 'Aquí comienza todo.' },
+  expand: { label: 'Más allá', title: 'La ruta tiene más de un camino.' },
+  return: { label: 'Primer paso', title: 'Ahora te toca a ti.' },
+}
 
 const nodeTypes = {
   quest: QuestNode,
@@ -111,6 +124,33 @@ function ViewportOverlay({
   return createPortal(children, viewportEl)
 }
 
+function MapEntryOverlay({
+  phase,
+  firstMissionTitle,
+  onSkip,
+}: {
+  phase: MapEntryPhase | null
+  firstMissionTitle?: string
+  onSkip: () => void
+}) {
+  if (!phase || phase === 'settled') return null
+  const copy = mapEntryCopy[phase]
+  const showsFirstMission = phase === 'focus' || phase === 'return'
+
+  return (
+    <aside className={`quest-map-entry quest-map-entry--${phase}`} aria-label="Entrada al mapa">
+      <p className="quest-map-entry__copy" aria-live="polite">
+        <span>{copy.label}</span>
+        <strong>{copy.title}</strong>
+        {showsFirstMission && firstMissionTitle && <small>{firstMissionTitle}</small>}
+      </p>
+      <button type="button" className="quest-map-entry__skip" onClick={onSkip}>
+        Omitir introducción
+      </button>
+    </aside>
+  )
+}
+
 function QuestMapCanvas({
   userId,
   chapter,
@@ -129,6 +169,8 @@ function QuestMapCanvas({
   preferredRouteId,
   isEvaluating,
   isVerifiedAction,
+  entrySequence = false,
+  onEntrySequenceComplete,
 }: QuestMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const companionRef = useRef<CompanionHandle>(null)
@@ -136,6 +178,14 @@ function QuestMapCanvas({
   const [instance, setInstance] = useState<ReactFlowInstance<MapNode, QuestFlowEdge> | null>(null)
   const [hoveredMissionId, setHoveredMissionId] = useState<string | null>(null)
   const [cameraZoom, setCameraZoom] = useState(1)
+  const [companionContactMissionId, setCompanionContactMissionId] = useState<string | null>(
+    () => selectedMissionId ?? activeMissionId ?? chapter.missions[0]?.id ?? null,
+  )
+  const [entryPhase, setEntryPhase] = useState<MapEntryPhase | null>(
+    () => (entrySequence ? 'world' : null),
+  )
+  const entryRunRef = useRef(false)
+  const entryTimersRef = useRef<number[]>([])
 
   const corridor = useMemo(
     () => deriveCorridor(chapter, preferredRouteId),
@@ -146,10 +196,23 @@ function QuestMapCanvas({
     chapter.missions.find((m) => m.id === (selectedMissionId || activeMissionId)) ||
     chapter.missions[0]
 
+  const firstActionableMission =
+    chapter.missions.find((mission) =>
+      ['available', 'active', 'submitted'].includes(progress[mission.id]),
+    ) ?? chapter.missions[0]
+
   const companionInitialPos = useMemo(() => {
     if (!activeOrInitialMission) return { x: 0, y: 0 }
     return getCompanionRestPosition(activeOrInitialMission)
   }, [activeOrInitialMission])
+
+  const handleCompanionTravelStart = useCallback(() => {
+    setCompanionContactMissionId(null)
+  }, [])
+
+  const handleCompanionTravelComplete = useCallback((missionId: string) => {
+    setCompanionContactMissionId(missionId)
+  }, [])
 
   const cameraDuration =
     typeof window !== 'undefined' &&
@@ -167,6 +230,87 @@ function QuestMapCanvas({
       duration: cameraDuration,
     })
   }, [cameraDuration, instance])
+
+  const clearEntryTimers = useCallback(() => {
+    for (const timer of entryTimersRef.current) window.clearTimeout(timer)
+    entryTimersRef.current = []
+  }, [])
+
+  const completeEntrySequence = useCallback(() => {
+    clearEntryTimers()
+    setEntryPhase('settled')
+    onEntrySequenceComplete?.()
+  }, [clearEntryTimers, onEntrySequenceComplete])
+
+  const skipEntrySequence = useCallback(() => {
+    if (!entrySequence) return
+    clearEntryTimers()
+    if (instance) {
+      void instance.fitView({
+        padding: 0.08,
+        minZoom: 0.4,
+        maxZoom: 1.05,
+        duration: 0,
+      })
+    }
+    completeEntrySequence()
+  }, [clearEntryTimers, completeEntrySequence, entrySequence, instance])
+
+  useEffect(() => {
+    if (!entrySequence) {
+      clearEntryTimers()
+      entryRunRef.current = false
+      setEntryPhase(null)
+      return
+    }
+    if (!instance || !firstActionableMission || entryRunRef.current) return
+
+    entryRunRef.current = true
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+    void instance.fitView({
+      padding: 0.08,
+      minZoom: 0.4,
+      maxZoom: 1.05,
+      duration: 0,
+    })
+
+    if (reducedMotion) {
+      completeEntrySequence()
+      return () => clearEntryTimers()
+    }
+
+    const firstMissionSize = getNodeDimension(firstActionableMission)
+    const focusFirstMission = () => {
+      setEntryPhase('focus')
+      void instance.setCenter(
+        firstActionableMission.position.x + firstMissionSize / 2,
+        firstActionableMission.position.y + firstMissionSize / 2,
+        { zoom: 0.94, duration: 700 },
+      )
+    }
+    const revealWorld = window.setTimeout(() => setEntryPhase('corridor'), 720)
+    const revealNodes = window.setTimeout(() => setEntryPhase('nodes'), 1520)
+    const focusTimer = window.setTimeout(focusFirstMission, 2520)
+    const expandTimer = window.setTimeout(() => {
+      setEntryPhase('expand')
+      fitMap()
+    }, 3820)
+    const returnTimer = window.setTimeout(() => {
+      setEntryPhase('return')
+      void instance.setCenter(
+        firstActionableMission.position.x + firstMissionSize / 2,
+        firstActionableMission.position.y + firstMissionSize / 2,
+        { zoom: 0.86, duration: 700 },
+      )
+    }, 5050)
+    const completeTimer = window.setTimeout(completeEntrySequence, 6250)
+    entryTimersRef.current = [revealWorld, revealNodes, focusTimer, expandTimer, returnTimer, completeTimer]
+
+    return () => clearEntryTimers()
+  }, [clearEntryTimers, completeEntrySequence, entrySequence, firstActionableMission, fitMap, instance])
 
   const nodes = useMemo<MapNode[]>(() => {
     const missionNodes: QuestFlowNode[] = chapter.missions.map((mission) => {
@@ -194,6 +338,10 @@ function QuestMapCanvas({
           lockedReason: lockedReasons[mission.id],
           isCorridor,
           isDimmed,
+          companionContact: mission.id === companionContactMissionId,
+          entryOrder: chapter.missions.indexOf(mission),
+          entryLocked: entrySequence && entryPhase !== 'settled',
+          entryFocus: entrySequence && mission.id === firstActionableMission?.id,
           onSelect: onMissionSelect,
           onHover: setHoveredMissionId,
         },
@@ -238,7 +386,11 @@ function QuestMapCanvas({
   }, [
     chapter,
     corridor,
+    companionContactMissionId,
+    entryPhase,
+    entrySequence,
     evaluationStateByMissionId,
+    firstActionableMission,
     lockedReasons,
     onMissionSelect,
     progress,
@@ -318,16 +470,12 @@ function QuestMapCanvas({
         const isForward = edge.source === prevId
         const sourceX = isForward
           ? prevMission.position.x + prevDim
-          : targetMission.position.x + targetDim
-        const sourceY = isForward
-          ? prevMission.position.y + prevDim / 2
-          : targetMission.position.y + targetDim / 2
+          : prevMission.position.x
+        const sourceY = prevMission.position.y + prevDim / 2
         const targetX = isForward
           ? targetMission.position.x
-          : prevMission.position.x
-        const targetY = isForward
-          ? targetMission.position.y + targetDim / 2
-          : prevMission.position.y + prevDim / 2
+          : targetMission.position.x + targetDim
+        const targetY = targetMission.position.y + targetDim / 2
 
         const edgePath = edge.via
           ? smoothSplineThroughVia(sourceX, sourceY, targetX, targetY, edge.via)
@@ -336,8 +484,8 @@ function QuestMapCanvas({
               sourceY,
               targetX,
               targetY,
-              sourcePosition: Position.Right,
-              targetPosition: Position.Left,
+              sourcePosition: isForward ? Position.Right : Position.Left,
+              targetPosition: isForward ? Position.Left : Position.Right,
               curvature: 0.34,
             })[0]
 
@@ -353,6 +501,7 @@ function QuestMapCanvas({
       }
     }
 
+    setCompanionContactMissionId(targetMission.id)
     companionRef.current?.teleportTo(targetRestPos)
   }, [chapter.edges, chapter.missions, selectedMissionId])
 
@@ -400,7 +549,7 @@ function QuestMapCanvas({
   }, [chapter.missions, instance, selectedMissionId])
 
   function handleKeyboardPan(event: KeyboardEvent<HTMLDivElement>) {
-    if (!instance || event.target !== event.currentTarget) return
+    if (!instance || event.target !== event.currentTarget || (entrySequence && entryPhase !== 'settled')) return
     const step = event.shiftKey ? 96 : 48
     const viewport = instance.getViewport()
     const offsets: Partial<Record<string, { x: number; y: number }>> = {
@@ -427,7 +576,10 @@ function QuestMapCanvas({
       ref={mapContainerRef}
       id="quest-map"
       className="quest-map"
+      data-entry-phase={entrySequence ? entryPhase ?? 'world' : undefined}
+      data-entry-locked={entrySequence && entryPhase !== 'settled'}
       tabIndex={0}
+      aria-busy={entrySequence && entryPhase !== 'settled'}
       aria-label="Lienzo del mapa de misiones"
       aria-describedby="quest-map-instructions"
       onKeyDown={handleKeyboardPan}
@@ -457,9 +609,9 @@ function QuestMapCanvas({
         nodesFocusable={false}
         edgesFocusable={false}
         zoomOnDoubleClick={false}
-        panOnDrag
-        zoomOnScroll
-        zoomOnPinch
+        panOnDrag={!(entrySequence && entryPhase !== 'settled')}
+        zoomOnScroll={!(entrySequence && entryPhase !== 'settled')}
+        zoomOnPinch={!(entrySequence && entryPhase !== 'settled')}
         preventScrolling
         aria-label="Mapa visual de misiones"
         proOptions={{ hideAttribution: true }}
@@ -475,14 +627,21 @@ function QuestMapCanvas({
             onStartMission={onStartMission}
             onSelectMission={onMissionSelect}
             onRecommendationChange={onRecommendationChange}
+            onTravelStart={handleCompanionTravelStart}
+            onTravelComplete={handleCompanionTravelComplete}
             isEvaluating={isEvaluating}
             isVerifiedAction={isVerifiedAction}
           />
         </ViewportOverlay>
       </ReactFlow>
+      <MapEntryOverlay
+        phase={entrySequence ? entryPhase : null}
+        firstMissionTitle={firstActionableMission?.title}
+        onSkip={skipEntrySequence}
+      />
       <MapControls
         zoom={cameraZoom}
-        disabled={!instance}
+        disabled={!instance || (entrySequence && entryPhase !== 'settled')}
         onZoomIn={() => void instance?.zoomIn({ duration: cameraDuration })}
         onZoomOut={() => void instance?.zoomOut({ duration: cameraDuration })}
         onFit={fitMap}

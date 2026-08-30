@@ -36,11 +36,9 @@ async function expectScrollableShell(page: Page, selector: string, terminalActio
     const appRoot = document.getElementById('root')
     return Boolean(
       appRoot
-      && getComputedStyle(html).overflow === 'hidden'
-      && getComputedStyle(document.body).overflow === 'hidden'
-      && getComputedStyle(appRoot).overflow === 'hidden'
-      && document.body.scrollHeight === document.body.clientHeight
-      && appRoot.scrollHeight === appRoot.clientHeight,
+      && html.scrollWidth === html.clientWidth
+      && document.body.scrollWidth === document.body.clientWidth
+      && appRoot.scrollWidth === appRoot.clientWidth,
     )
   })).toBe(true)
 
@@ -63,12 +61,16 @@ for (const viewport of [
     })
 
     test('identity entry scrolls to its final action', async ({ page }) => {
+      await page.route('**/api/v1/profiles', async (route) => {
+        await route.fulfill({ json: [] })
+      })
       await page.goto('http://127.0.0.1:5173')
+      await page.getByRole('button', { name: 'Crear una ruta' }).click()
       await page.getByLabel('Tu nombre').fill('Euge')
 
       await expectScrollableShell(
         page,
-        '.entry-shell',
+        '.product-route',
         page.getByRole('button', { name: /Continuar/ }),
       )
     })
@@ -76,11 +78,14 @@ for (const viewport of [
     test('role selection scrolls to its final choice', async ({ page }) => {
       await mockActiveProfile(page, profile())
       await page.goto('http://127.0.0.1:5173')
+      const learnerChoice = page.getByRole('radio', { name: /Alumno/ })
+      await learnerChoice.click()
+      await expect(page.getByRole('button', { name: /Continuar/ })).toBeEnabled()
 
       await expectScrollableShell(
         page,
-        '.entry-shell',
-        page.getByRole('button', { name: /Estoy guiando el programa/ }),
+        '.product-route',
+        page.getByRole('button', { name: /Continuar/ }),
       )
     })
 
@@ -102,7 +107,7 @@ for (const viewport of [
       await expectScrollableShell(
         page,
         '.profile-selection-shell',
-        page.getByRole('button', { name: 'Volver al recorrido' }),
+        page.getByRole('button', { name: 'Crear una ruta' }),
       )
 
       await shell.evaluate((element) => element.scrollTo({ top: 0 }))
@@ -111,25 +116,16 @@ for (const viewport of [
       for (let index = 0; index < profiles.length + 1; index += 1) {
         await page.keyboard.press('Tab')
       }
-      await expect(page.getByRole('button', { name: 'Volver al recorrido' })).toBeFocused()
-      await expect(page.getByRole('button', { name: 'Volver al recorrido' })).toBeInViewport()
+      await expect(page.getByRole('button', { name: 'Crear una ruta' })).toBeFocused()
+      await expect(page.getByRole('button', { name: 'Crear una ruta' })).toBeInViewport()
     })
 
     test('coach onboarding scrolls to calibration action', async ({ page }) => {
       await mockActiveProfile(page, profile({ role: 'coach' }))
       await page.goto('http://127.0.0.1:5173')
-      const transformationField = page.getByRole('textbox', { name: /Qué estás ayudando a conseguir/ })
+      const transformationField = page.getByRole('textbox', { name: /Resultado que guías/ })
       await transformationField.fill('Conseguir el primer cliente digital')
-      await page.getByText('Texto', { exact: true }).click()
-
-      await expectScrollableShell(
-        page,
-        '.coach-entry-shell',
-        page.getByRole('button', { name: /Ir a calibración/ }),
-      )
-
-      await transformationField.focus()
-      await expect(transformationField).toBeInViewport()
+      await expect(page.locator('.route-rail__stages li').nth(0)).toHaveAttribute('data-state', 'current')
       const [fieldBox, switcherBox] = await Promise.all([
         transformationField.boundingBox(),
         page.locator('.profile-switcher').boundingBox(),
@@ -137,6 +133,23 @@ for (const viewport of [
       expect(fieldBox).not.toBeNull()
       expect(switcherBox).not.toBeNull()
       expect(fieldBox!.y).toBeGreaterThanOrEqual(switcherBox!.y + switcherBox!.height)
+      await page.getByRole('button', { name: /Continuar/ }).click()
+      await page.getByText('Texto', { exact: true }).click()
+      await page.getByRole('button', { name: /Atrás/ }).click()
+      await expect(transformationField).toHaveValue('Conseguir el primer cliente digital')
+      await page.getByRole('button', { name: /Continuar/ }).click()
+      await expect(page.locator('input[type="checkbox"]').first()).toBeChecked()
+      await page.getByRole('button', { name: /Continuar/ }).click()
+      await page.getByText('Usar mis ejemplos', { exact: true }).click()
+      await page.getByRole('button', { name: /Continuar/ }).click()
+      await expect(page.getByRole('heading', { name: /Marca el límite/ })).toBeVisible()
+      await expect(page.locator('.route-rail__stages li').nth(3)).toHaveAttribute('data-state', 'current')
+
+      await expectScrollableShell(
+        page,
+        '.product-route',
+        page.getByRole('button', { name: /Ir a calibración/ }),
+      )
     })
 
     test('learner setup scrolls to its next action', async ({ page }) => {
@@ -157,12 +170,12 @@ for (const viewport of [
         })
       })
       await page.goto('http://127.0.0.1:5173')
-      await page.getByText('Publicar mi primera pieza estratégica', { exact: true }).click()
+      await expect(page.getByRole('heading', { name: /Elige el enfoque/ })).toBeVisible()
 
       await expectScrollableShell(
         page,
-        '.setup-shell',
-        page.getByRole('button', { name: /Siguiente/ }),
+        '.product-route',
+        page.getByRole('button', { name: /Comenzar mi recorrido/ }),
       )
     })
 
@@ -191,16 +204,15 @@ for (const viewport of [
       await page.goto('http://127.0.0.1:5173')
 
       await expect(page.locator('.app-shell')).toBeVisible()
-      await expect(page.locator('.entry-shell, .coach-entry-shell, .setup-shell, .calibration-shell')).toHaveCount(0)
+      await expect(page.locator('.entry-shell, .coach-entry-shell, .setup-shell, .product-route, .calibration-shell')).toHaveCount(0)
       await expect.poll(() => page.evaluate(() => {
         const html = document.documentElement
         const appRoot = document.getElementById('root')
         return Boolean(
           appRoot
-          && getComputedStyle(html).overflow === 'hidden'
-          && getComputedStyle(document.body).overflow === 'hidden'
-          && getComputedStyle(appRoot).overflow === 'hidden'
-          && document.body.scrollHeight === document.body.clientHeight
+          && html.scrollWidth === html.clientWidth
+          && document.body.scrollWidth === document.body.clientWidth
+          && appRoot.scrollWidth === appRoot.clientWidth
           && appRoot.scrollHeight === appRoot.clientHeight,
         )
       })).toBe(true)
