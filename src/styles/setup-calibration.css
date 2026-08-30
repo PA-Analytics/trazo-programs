@@ -693,20 +693,29 @@ legend {
 .hud-bar .profile-switcher {
   position: static;
   z-index: auto;
-  max-width: 320px;
-  padding: 4px 4px 4px 12px;
-  background: var(--trazo-surface);
-  border-radius: 14px 4px 14px 4px;
-  box-shadow: none;
+  max-width: 340px;
+  padding: 4px 6px 4px 12px;
+  background: #19221c;
+  border: 1.5px solid color-mix(in srgb, var(--trazo-paper) 20%, transparent);
+  border-radius: 10px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
 }
 
 .hud-bar .profile-switcher__name {
   max-width: 130px;
+  color: var(--trazo-paper);
 }
 
 .hud-bar .profile-switcher__button {
-  background: var(--trazo-paper);
-  border: 2px solid var(--trazo-ink);
+  background: color-mix(in srgb, var(--trazo-paper) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--trazo-paper) 20%, transparent);
+  color: var(--trazo-paper);
+}
+
+.hud-bar .profile-switcher__button:hover {
+  background: var(--trazo-indigo);
+  border-color: var(--trazo-indigo);
+  color: #fff;
 }
 
 .profile-selection-shell {

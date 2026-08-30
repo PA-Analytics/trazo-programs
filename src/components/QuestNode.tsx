@@ -106,6 +106,7 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
         <span className="quest-node-depth" aria-hidden="true" />
         <span className="quest-node-shape" aria-hidden="true">
           <span className="quest-node-frame" />
+          <span className="quest-node-led" />
           <MissionIcon state={progressState} nodeType={mission.nodeType} missionId={mission.id} />
           <StateBadge state={progressState} />
         </span>
