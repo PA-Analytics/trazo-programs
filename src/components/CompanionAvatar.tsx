@@ -238,18 +238,12 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
     [autoFetchGateKey, implementationId, onRecommendationChange, userId],
     )
 
+    // Fetch next action only when user explicitly opens Trazz panel
     useEffect(() => {
-      const gate = autoFetchGateFor(autoFetchGateKey)
-      if (
-        availableMissions.length > 1 &&
-        !proposal &&
-        !isLoading &&
-        !gate.held &&
-        !gate.inFlight
-      ) {
+      if (isOpen && !proposal && !isLoading) {
         void fetchNextAction()
       }
-    }, [availableMissions.length, autoFetchGateKey, fetchNextAction, isLoading, proposal])
+    }, [fetchNextAction, isLoading, isOpen, proposal])
 
     // Modo TRAZO / Verificación
     useEffect(() => {
@@ -269,9 +263,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
         ? 'verified'
         : isEvaluating || isLoading
           ? 'thinking'
-          : proposal?.type === 'ASK_CLARIFICATION' || proposal?.type === 'RECOMMEND_MISSION'
-            ? 'attention'
-            : 'idle')
+          : 'idle')
 
     const characterEmotion: TrazzEmotion =
       isMoving
@@ -434,15 +426,6 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
 
           {/* Personaje Animado Oficial de TRAZO */}
           <TrazzCharacter state={characterEmotion} facing={facing} />
-
-          {/* Cue de Atención ("Tengo una duda" / "Vamos por aquí") */}
-          {visualState === 'attention' && !isOpen && (
-            <div className="trazo-attention-pill" role="status">
-              <span>
-                {proposal?.type === 'ASK_CLARIFICATION' ? 'Tengo una duda' : 'Vamos por aquí'}
-              </span>
-            </div>
-          )}
 
           {/* Sello de Modo TRAZO verificado ("yep. eso sí") */}
           {visualState === 'verified' && !isOpen && (

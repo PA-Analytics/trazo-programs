@@ -180,7 +180,7 @@ export function LearnerQuickSetup({
         </div>
 
         {/* Clean Editorial Header */}
-        <header className="calibration-header-v3">
+        <header className="calibration-header-v3" key={`header-${step}`}>
           <div className="calibration-header-v3__content">
             <span className="quiz-eyebrow-stamp">
               CALIBRACIÓN · PASO {step} DE 3
@@ -213,7 +213,7 @@ export function LearnerQuickSetup({
           </div>
 
           {/* Companion box on the right with Trazz */}
-          <div className="calibration-companion-box" aria-live="polite">
+          <div className="calibration-companion-box" aria-live="polite" key={`companion-${step}`}>
             <div className="companion-bubble">
               <span className="companion-bubble__author">trazz</span>
               <p className="companion-bubble__text">
@@ -406,7 +406,7 @@ export function LearnerQuickSetup({
         )}
 
         {/* Footer Navigation */}
-        <footer className="calibration-footer-v3">
+        <footer className="calibration-footer-v3" key={`footer-${step}`}>
           {step > 1 && (
             <button
               type="button"

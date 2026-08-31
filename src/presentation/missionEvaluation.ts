@@ -91,7 +91,7 @@ export function getMissionEvaluationPresentation({
       return {
         state: 'rework',
         evidenceHelp: 'Esto sigue aquí. Le damos una vuelta y lo revisamos otra vez.',
-        feedbackTitle: 'TODAVÍA NO',
+        feedbackTitle: 'REWORK',
         submitLabel: 'Editar y volver a verificar',
       }
     case 'clarify':

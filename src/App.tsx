@@ -18,7 +18,6 @@ import type {
   Mission,
   MissionEvaluationState,
   MissionInteractionTurn,
-  ProgressState,
 } from './domain/course'
 import type { UserProfile } from './domain/identity'
 import {
@@ -30,6 +29,7 @@ import {
   normalizeSubmissionFailure,
 } from './presentation/missionEvaluation'
 import type { SubmissionResponseDTO } from './server/types'
+import { useUiSoundEffects } from './hooks/useUiSoundEffects'
 
 function getPrerequisiteSummary(mission: Mission, chapter: Chapter) {
   const titleById = new Map(chapter.missions.map((item) => [item.id, item.title]))
@@ -78,10 +78,11 @@ function selectDemoPackId(): string {
 }
 
 export function App() {
+  useUiSoundEffects()
+
   const [selectedPackId] = useState(() => selectDemoPackId())
   const staticCourse = useMemo(() => resolvePack(selectedPackId), [selectedPackId])
   const [graphCourse, setGraphCourse] = useState<Course | null>(null)
-  const [graphProgress, setGraphProgress] = useState<Record<string, ProgressState> | null>(null)
   const course = graphCourse ?? staticCourse
   const [activeUserId, setActiveUserId] = useState(() => localStorage.getItem('trazo_active_user_id') || '')
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -201,7 +202,6 @@ export function App() {
     setIsLoading(true)
     setServerError(null)
     setGraphCourse(null)
-    setGraphProgress(null)
     try {
       const headers = { 'X-Trazo-User-Id': profile.userId }
       let res = await fetch(`/api/v1/implementations/${implementationId}`, { headers })
@@ -225,10 +225,8 @@ export function App() {
       if (graphResponse.ok) {
         const graphView = await graphResponse.json() as {
           course?: Course
-          progress?: Record<string, ProgressState>
         }
         if (graphView.course) setGraphCourse(graphView.course)
-        if (graphView.progress) setGraphProgress(graphView.progress)
       }
     } catch {
       setServerError('No se pudo conectar con el estado de aprendizaje. Intenta de nuevo.')
@@ -250,8 +248,8 @@ export function App() {
     course.chapters.find((chapter) => chapter.id === activeChapterId) ?? course.chapters[0]
 
   const progress = useMemo(
-    () => graphProgress ?? deriveMissionProgress(activeChapter.missions, completedMissionIds),
-    [activeChapter.missions, completedMissionIds, graphProgress],
+    () => deriveMissionProgress(activeChapter.missions, completedMissionIds),
+    [activeChapter.missions, completedMissionIds],
   )
 
   const availableMissions = useMemo(

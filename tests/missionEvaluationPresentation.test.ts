@@ -40,7 +40,7 @@ test('C. Mission evaluation UX keeps REWORK and CLARIFY separate from system fai
   })
 
   assert.equal(rework.state, 'rework')
-  assert.equal(rework.feedbackTitle, 'TODAVÍA NO')
+  assert.equal(rework.feedbackTitle, 'REWORK')
   assert.equal(clarify.state, 'clarify')
   assert.equal(clarify.feedbackTitle, 'ME FALTA UNA COSA')
 })

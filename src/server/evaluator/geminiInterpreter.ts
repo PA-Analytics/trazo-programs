@@ -57,6 +57,10 @@ export class GeminiEvidenceInterpreter implements IEvidenceInterpreter {
           config: {
             systemInstruction: COMPANION_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
+            temperature: 0.1,
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
           },
         })
 

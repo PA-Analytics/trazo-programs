@@ -8,6 +8,7 @@ RUN npm ci
 
 COPY tsconfig*.json ./
 COPY vite.config.ts index.html ./
+COPY *.png ./
 COPY src/ ./src/
 
 RUN npm run build
@@ -26,6 +27,7 @@ RUN npm ci --omit=dev
 # Copy built frontend assets and server source
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src ./src
+COPY --from=builder /app/*.png ./
 
 EXPOSE 8080
 

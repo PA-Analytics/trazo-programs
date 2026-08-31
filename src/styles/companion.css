@@ -286,26 +286,44 @@
 .trazo-companion-root[data-direction="NW"] .trazo-figure-torso { transform: rotate(-3deg); }
 .trazo-companion-root[data-direction="NW"] .trazo-figure-compass::after { transform: rotate(315deg); }
 
-/* Cue de Atención Periférica */
+/* Bocadillo de Diálogo de Trazz */
 .trazo-attention-pill {
   position: absolute;
-  top: -24px;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
   white-space: nowrap;
-  background: var(--trazo-ink);
-  color: var(--trazo-paper);
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
+  background: var(--trazo-paper, #fdfbf7);
+  color: var(--trazo-ink, #111827);
+  font-family: var(--trazo-font-sans, inherit);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  padding: 6px 14px;
+  border-radius: 14px;
+  border: 2px solid var(--trazo-ink, #111827);
   pointer-events: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  animation: trazo-attention-pop 250ms var(--trazo-ease-standard);
-  z-index: 10;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16), 2px 2px 0 var(--trazo-ink, #111827);
+  animation: trazo-attention-pop 220ms var(--trazo-ease-standard);
+  z-index: 20;
+}
+
+.trazo-attention-pill::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--trazo-ink, #111827);
 }
 
 @keyframes trazo-attention-pop {
-  from { opacity: 0; transform: translateY(4px) scale(0.9); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translate(-50%, 6px) scale(0.88); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 /* Sello de Verificación Modo TRAZO ("yep. eso sí") */
