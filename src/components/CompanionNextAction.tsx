@@ -176,7 +176,7 @@ export function CompanionNextAction({
         <div className="companion-next-action-header">
           <span className="companion-next-action-tag">Siguiente ruta</span>
           <h3 id="companion-next-action-title">
-            {proposal?.type === 'RECOMMEND_MISSION' ? 'Vamos por aqui' : 'TRAZO'}
+            {proposal?.type === 'RECOMMEND_MISSION' ? 'Vamos por aqui' : 'TRAZZ'}
           </h3>
         </div>
 
@@ -184,7 +184,7 @@ export function CompanionNextAction({
           <ol className="companion-decision-thread" aria-label="Conversacion reciente sobre la ruta">
             {priorTurns.map((turn, index) => (
               <li key={`${turn.role}-${index}`} data-role={turn.role}>
-                <span>{turn.role === 'companion' ? 'TRAZO' : 'Tu'}</span>
+                <span>{turn.role === 'companion' ? 'TRAZZ' : 'Tu'}</span>
                 <p>{turn.content}</p>
               </li>
             ))}
@@ -237,7 +237,7 @@ export function CompanionNextAction({
 
             <form onSubmit={handleClarificationSubmit} className="companion-clarification-form">
               <label className="visually-hidden" htmlFor="next-action-clarification">
-                Responde a TRAZO sobre la ruta que prefieres
+                Responde a TRAZZ sobre la ruta que prefieres
               </label>
               <input
                 id="next-action-clarification"

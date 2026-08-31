@@ -79,39 +79,49 @@ test.describe('First-Run Route Materialization E2E Browser Flow', () => {
 
     // 1. Visit app - Route Framing screen is rendered
     await page.goto('http://127.0.0.1:5173')
-    await expect(page.getByRole('heading', { name: 'Elige el enfoque de tu recorrido.' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /ELIGE TU FORMATO INICIAL/i })).toBeVisible()
     await expect(page.getByRole('radio', { name: /Estructura Directa/ })).toBeVisible()
     await expect(page.getByRole('radio', { name: /Estructura Narrativa/ })).toBeVisible()
 
-    // 2. Select Estructura Narrativa (03B)
-    const narrativeChoice = page.locator('button.learner-route-choice[data-route="N03"]')
+    // 2. Select Estructura Narrativa (N03)
+    const narrativeChoice = page.getByRole('radio', { name: /Estructura Narrativa/ })
     await narrativeChoice.click()
-    await expect(narrativeChoice).toHaveAttribute('data-selected', 'true')
-    await expect(page.locator('.learner-route-corridor-preview')).toContainText('Estructura Narrativa')
+    await expect(narrativeChoice).toHaveAttribute('aria-checked', 'true')
 
-    // 3. Confirm route
-    const submitBtn = page.getByRole('button', { name: 'Comenzar mi recorrido →' })
-    await expect(submitBtn).toBeEnabled()
-    await submitBtn.click()
+    // 3. Step 1 -> Step 2
+    const step1NextBtn = page.getByRole('button', { name: /Siguiente paso →/ })
+    await expect(step1NextBtn).toBeEnabled()
+    await step1NextBtn.click()
 
-    // 4. Verify exact backend payload sent
+    // 4. Step 2 -> Step 3
+    await expect(page.getByRole('heading', { name: /FEEDBACK/i })).toBeVisible()
+    const step2NextBtn = page.getByRole('button', { name: /Siguiente paso →/ })
+    await expect(step2NextBtn).toBeEnabled()
+    await step2NextBtn.click()
+
+    // 5. Step 3 -> Finish
+    await expect(page.getByRole('heading', { name: /CUÁNTO TIEMPO/i })).toBeVisible()
+    const finishBtn = page.getByRole('button', { name: /Materializar mi mapa →/ })
+    await expect(finishBtn).toBeEnabled()
+    await finishBtn.click()
+
+    // 6. Verify exact backend payload sent
     expect(savedSetupPayload).toEqual({
       preferredRouteId: 'N03',
+      helpPreference: 'DIRECT',
+      availableTime: '30_60_MIN',
     })
 
-    // 5. Verify the explicit setup-to-map boundary
-    await expect(page.getByRole('heading', { name: 'Tu ruta está lista.' })).toBeVisible()
-    await page.getByRole('button', { name: /Entrar al mapa/ }).click()
-
-    // 6. Verify transition to QuestMap with materialized corridor
+    // 7. Verify transition to QuestMap with materialized corridor
     await expect(page.locator('.app-shell')).toBeVisible()
     await expect(page.locator('.quest-map-stage, .react-flow')).toBeVisible()
     const map = page.locator('.quest-map')
-    await expect(map).toHaveAttribute('data-entry-phase', 'world')
+    await expect(map).toHaveAttribute('data-entry-phase', 'commit')
     await expect(map).toHaveAttribute('data-entry-locked', 'true')
+    await expect(page.getByText('Vía elegida: Estructura Narrativa')).toBeVisible()
     await expect(page.getByRole('button', { name: /Omitir introducción/ })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Acercar mapa' })).toBeDisabled()
-    await expect.poll(() => map.getAttribute('data-entry-phase'), { timeout: 1800, interval: 40 }).toBe('corridor')
+    await expect.poll(() => map.getAttribute('data-entry-phase'), { timeout: 1200, interval: 40 }).toBe('tracing')
 
     // 7. Verify node corridor attributes: N03 is corridor, N02 is dimmed
     const nodeN03 = page.locator('.quest-node-shell').filter({ hasText: 'Estructura Narrativa' })
@@ -119,7 +129,13 @@ test.describe('First-Run Route Materialization E2E Browser Flow', () => {
 
     await expect(nodeN03).toHaveAttribute('data-corridor', 'true')
     await expect(nodeN03).toHaveAttribute('data-dimmed', 'false')
+    await expect(nodeN03).toHaveAttribute('data-entry-route', 'true')
+    await expect(nodeN03).toHaveAttribute('data-entry-current', 'true')
     await expect(nodeN02).toHaveAttribute('data-dimmed', 'true')
+    await expect(nodeN02).toHaveAttribute('data-entry-route', 'false')
+
+    await expect.poll(() => map.getAttribute('data-entry-phase'), { timeout: 6000, interval: 40 }).toBe('destination')
+    await expect.poll(() => map.getAttribute('data-entry-phase'), { timeout: 1500, interval: 40 }).toBe('return')
 
     await page.getByRole('button', { name: /Omitir introducción/ }).focus()
     await expect(page.getByRole('button', { name: /Omitir introducción/ })).toBeFocused()

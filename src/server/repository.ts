@@ -197,9 +197,42 @@ export class FirestoreImplementationRepository implements IImplementationReposit
 
   async save(state: ImplementationState): Promise<void> {
     const docRef = this.firestore.collection(this.collectionName).doc(state.id)
-    // Convert undefined properties into omitted fields for clean Firestore persistence
     const cleanState = JSON.parse(JSON.stringify(state))
-    await docRef.set(cleanState, { merge: true })
+
+    await this.firestore.runTransaction(async (transaction) => {
+      const doc = await transaction.get(docRef)
+      if (!doc.exists) {
+        transaction.set(docRef, cleanState)
+        return
+      }
+
+      const existing = doc.data() as ImplementationState
+      // Atomically union completedMissionIds so no concurrent completion is dropped
+      const mergedCompleted = Array.from(
+        new Set([...(existing.completedMissionIds || []), ...(state.completedMissionIds || [])]),
+      )
+      // Atomically merge canonical artifacts
+      const mergedArtifacts = {
+        ...(existing.artifacts || {}),
+        ...(state.artifacts || {}),
+      }
+      // Merge evaluation provenance without duplicates
+      const existingProvenance = existing.evaluationProvenance || []
+      const newProvenance = (state.evaluationProvenance || []).filter(
+        (p) => !existingProvenance.some((e) => e.submissionId === p.submissionId),
+      )
+
+      const finalState: ImplementationState = {
+        ...existing,
+        ...cleanState,
+        completedMissionIds: mergedCompleted,
+        artifacts: mergedArtifacts,
+        evaluationProvenance: [...existingProvenance, ...newProvenance],
+        updatedAt: state.updatedAt || new Date().toISOString(),
+      }
+
+      transaction.set(docRef, JSON.parse(JSON.stringify(finalState)))
+    })
   }
 
   async list(): Promise<ImplementationState[]> {
@@ -246,6 +279,10 @@ export class FirestoreProfileRepository implements IProfileRepository {
   async list(): Promise<UserProfile[]> {
     const snapshot = await this.firestore.collection(this.collectionName).get()
     return snapshot.docs.map((doc) => doc.data() as UserProfile)
+  }
+
+  async delete(userId: string): Promise<void> {
+    await this.firestore.collection(this.collectionName).doc(userId).delete()
   }
 }
 
@@ -345,6 +382,12 @@ export class FileStorageProfileRepository implements IProfileRepository {
   async list() {
     this.load()
     return Array.from(this.cache.values()).map((profile) => structuredClone(profile))
+  }
+
+  async delete(userId: string) {
+    this.load()
+    this.cache.delete(userId)
+    this.persist()
   }
 }
 
@@ -537,6 +580,10 @@ export class MemoryProfileRepository implements IProfileRepository {
 
   async list() {
     return Array.from(this.storage.values()).map((profile) => structuredClone(profile))
+  }
+
+  async delete(userId: string) {
+    this.storage.delete(userId)
   }
 }
 

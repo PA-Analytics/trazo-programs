@@ -22,8 +22,20 @@ Valores extraídos de `app/globals.css`, `app/layout.tsx` y componentes de la la
 | Semantic | `--trazo-border` | `var(--trazo-ink)` | bordes principales | contención estructural |
 | Semantic | `--trazo-muted` | `var(--trazo-stone)` | texto secundario (en código también `#686558`) | menor prioridad |
 | Semantic | `--trazo-focus` | `var(--trazo-indigo)` | focus-visible de 3px | orientación accesible |
+| Semantic | `--trazo-pass` | `var(--trazo-indigo)` (`#3657FF`) | Veredicto PASS / Aprobado | Estándar superado |
+| Semantic | `--trazo-pass-soft` | `var(--trazo-indigo-light)` (`#E7EBFF`) | Fondos de veredicto PASS | Respaldo suave |
+| Semantic | `--trazo-rework` | `#D97706` | Sombra y acento de REWORK | Advertencia pedagógica, rigor |
+| Semantic | `--trazo-rework-bg` | `#FEF3C7` | Fondo keycap de REWORK | Papel ámbar mineral cálido |
+| Semantic | `--trazo-rework-border` | `#F59E0B` | Borde activo de REWORK | Contorno de precisión ámbar |
+| Semantic | `--trazo-rework-text` | `#92400E` | Texto display de REWORK | Óxido/marrón mineral legible |
+| Semantic | `--trazo-rework-badge` | `#FBBF24` | Badge y micro-labels REWORK | Resalte de advertencia |
+| Semantic | `--trazo-rework-shadow` | `#D97706` | Sombra sólida 4px 4px 0 | Materialidad táctil 3D |
+| Semantic | `--trazo-clarify` | `var(--trazo-stone-dark)` (`#586058`) | Veredicto CLARIFY | Evidencia incontrastable/ambigua |
+| Semantic | `--trazo-crimson` | `#E53935` | "Rojo God" / Destructivo / Peligro | Eliminación irreversible, alerta crítica |
+| Semantic | `--trazo-crimson-bright` | `#FF453A` | Neón de advertencia / hover destructivo | Foco de peligro y micro-highlights |
+| Semantic | `--trazo-crimson-shadow` | `#8B0000` | Sombra 3D offset destructiva | Relieve táctil para botones de borrado |
 
-Nota: `--muted-foreground` actual es `rgb(104 101 88)` / `#686558`, distinto de `--stone`. Mantener esa diferencia cuando el contraste textual lo exija.
+Nota: Ver guía completa de acentos en [`docs/brand/PALETA_DE_COLORES.md`](PALETA_DE_COLORES.md). `--muted-foreground` actual es `rgb(104 101 88)` / `#686558`, distinto de `--stone`. Mantener esa diferencia cuando el contraste textual lo exija.
 
 ## Tipografía
 

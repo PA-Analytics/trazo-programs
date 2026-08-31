@@ -123,6 +123,41 @@ export interface IProfileRepository {
   getById(userId: string): Promise<UserProfile | null>
   save(profile: UserProfile): Promise<void>
   list(): Promise<UserProfile[]>
+  delete(userId: string): Promise<void>
+}
+
+export type LearnerHealthStatus = 'healthy' | 'iterating' | 'stalled' | 'human_review'
+
+export interface CohortLearnerSummary {
+  implementationId: string
+  userId?: string
+  displayName?: string
+  courseId: string
+  courseTitle: string
+  completedMissionIds: string[]
+  completedCount: number
+  totalMissions: number
+  progressPercentage: number
+  activeMissionId?: string
+  activeMissionTitle?: string
+  healthStatus: LearnerHealthStatus
+  consecutiveReworks: number
+  lastActivityAt: string
+  preferredRouteId?: string
+  helpPreference?: string
+}
+
+export interface CohortMetrics {
+  totalLearners: number
+  stalledLearners: number
+  pendingHumanReviews: number
+  averageCompleted: number
+  globalPassRate: number
+}
+
+export interface CohortOverviewResponseDTO {
+  cohort: CohortLearnerSummary[]
+  metrics: CohortMetrics
 }
 
 export type {

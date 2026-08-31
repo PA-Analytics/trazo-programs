@@ -456,6 +456,16 @@ export function createRequestListener(
         return
       }
 
+      if (identity && method === 'DELETE' && profileMatch) {
+        const deleted = await identity.deleteProfile(profileMatch[1])
+        if (!deleted) {
+          sendJSON(res, 404, { error: 'Profile not found' })
+          return
+        }
+        sendJSON(res, 200, { success: true, userId: profileMatch[1] })
+        return
+      }
+
       const roleMatch = pathname.match(/^\/api\/v1\/profiles\/([^/]+)\/role$/)
       if (identity && method === 'PATCH' && roleMatch) {
         const body = await parseBody<{ role: UserRole }>(req)
@@ -501,6 +511,28 @@ export function createRequestListener(
         }
         if (!identity && headerCoachId) return { coachId: headerCoachId, userId: headerUserId }
         return { coachId: undefined, userId: headerUserId }
+      }
+
+      if (method === 'GET' && pathname === '/api/v1/coach/cohort') {
+        if (!(await requireRole(req, res, identity, 'coach')) && identity) return
+        if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        const { coachId } = await extractCoachContext()
+        const data = await service.getCohortOverview(coachId, identity?.repository)
+        sendJSON(res, 200, data)
+        return
+      }
+
+      const coachEvidenceMatch = pathname.match(/^\/api\/v1\/coach\/implementations\/([^/]+)\/evidence$/)
+      if (method === 'GET' && coachEvidenceMatch) {
+        if (!(await requireRole(req, res, identity, 'coach')) && identity) return
+        if (!identity && !requireLegacyCreatorHeader(req, res)) return
+        try {
+          const data = await service.getLearnerEvidenceHistory(coachEvidenceMatch[1])
+          sendJSON(res, 200, data)
+        } catch (err: unknown) {
+          sendJSON(res, 404, { error: err instanceof Error ? err.message : 'Evidence history not found' })
+        }
+        return
       }
 
       if (options.methodologyService && method === 'POST' && pathname === '/api/v1/methodologies') {

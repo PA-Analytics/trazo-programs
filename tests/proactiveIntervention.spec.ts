@@ -206,14 +206,13 @@ test.describe('Repeated-Friction Proactive Recovery E2E Flow', () => {
     await expect(page.locator('.companion-feedback-summary')).toBeVisible()
     await expect(page.locator('.mission-friction-recovery')).toHaveCount(0)
 
-    // 4. Second Submission -> REWORK (2nd consecutive attempt on N01)
+    // 4. Second Submission -> 2nd consecutive REWORK -> Proactive recovery card surfaces!
     await textarea.fill('Consejos de ventas para profesionales independientes.')
     await page.locator('.submit-evidence-button').click()
 
-    // Proactive recovery card APPEARS without user requesting help
     const recoveryCard = page.locator('.mission-friction-recovery')
     await expect(recoveryCard).toBeVisible()
-    await expect(recoveryCard).toContainText('Orientación ante intentos reiterados')
+    await expect(recoveryCard).toContainText('Sugerencia para avanzar')
     await expect(recoveryCard).toContainText('Audiencia Reconocible')
 
     // 5. Click "Entendido" -> Dismisses card
@@ -226,6 +225,6 @@ test.describe('Repeated-Friction Proactive Recovery E2E Flow', () => {
 
     // Mission verified!
     await expect(page.locator('.mission-complete-note')).toBeVisible()
-    await expect(page.locator('.mission-complete-note')).toContainText('Condición completada y verificada')
+    await expect(page.locator('.mission-complete-note')).toContainText('completado y validado')
   })
 })

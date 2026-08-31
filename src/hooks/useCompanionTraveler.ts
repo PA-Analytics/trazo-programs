@@ -7,12 +7,16 @@ interface UseCompanionTravelerOptions {
   containerRef: React.RefObject<HTMLDivElement | null>
   onTravelStart?: (targetMissionId: string) => void
   onTravelComplete?: (targetMissionId: string) => void
+  onDirectionChange?: (facing: 'left' | 'right') => void
+  onMovingChange?: (isMoving: boolean) => void
 }
 
 export function useCompanionTraveler({
   containerRef,
   onTravelStart,
   onTravelComplete,
+  onDirectionChange,
+  onMovingChange,
 }: UseCompanionTravelerOptions) {
   const animFrameRef = useRef<number | null>(null)
   const settleTimeoutRef = useRef<number | null>(null)
@@ -33,13 +37,14 @@ export function useCompanionTraveler({
       element.dataset.state = 'idle'
       element.dataset.motionPhase = 'settled'
       element.dataset.contact = 'settled'
+      onMovingChange?.(false)
       const shadow = element.querySelector('.trazo-companion-shadow') as HTMLElement | null
       if (shadow) {
         shadow.style.transform = 'translateX(-50%) scale(1, 1)'
         shadow.style.opacity = '0.45'
       }
     }
-  }, [containerRef])
+  }, [containerRef, onMovingChange])
 
   const teleportTo = useCallback(
     (pos: MapPosition, direction: CompassDirection8 = 'SE') => {
@@ -53,6 +58,8 @@ export function useCompanionTraveler({
       element.dataset.motionPhase = 'settled'
       element.dataset.contact = 'settled'
       element.style.zIndex = `${Math.floor(pos.y / 10) + 15}`
+      onDirectionChange?.(direction.includes('W') ? 'left' : 'right')
+      onMovingChange?.(false)
 
       const shadow = element.querySelector('.trazo-companion-shadow') as HTMLElement | null
       if (shadow) {
@@ -87,6 +94,8 @@ export function useCompanionTraveler({
         element.dataset.motionPhase = 'settled'
         element.dataset.contact = 'settled'
         element.style.zIndex = `${Math.floor(finalSample.y / 10) + 15}`
+        onDirectionChange?.(finalSample.direction.includes('W') ? 'left' : 'right')
+        onMovingChange?.(false)
 
         const shadow = element.querySelector('.trazo-companion-shadow') as HTMLElement | null
         if (shadow) {
@@ -98,13 +107,14 @@ export function useCompanionTraveler({
         return
       }
 
-      const durationMs = Math.max(420, (totalLen / speedPxPerSec) * 1000)
-      const anticipationEnd = 0.12
-      const travelEnd = 0.88
+      const durationMs = Math.max(650, Math.min(1100, (totalLen / speedPxPerSec) * 1000))
+      const anticipationEnd = 0.08
+      const travelEnd = 0.92
       let startTime: number | null = null
       element.dataset.state = 'moving'
       element.dataset.motionPhase = 'anticipate'
       element.dataset.contact = 'moving'
+      onMovingChange?.(true)
 
       const step = (now: number) => {
         if (!startTime) startTime = now
@@ -124,24 +134,20 @@ export function useCompanionTraveler({
 
         const lift =
           progress > anticipationEnd && progress < travelEnd
-            ? Math.sin(travelProgress * Math.PI) * 1.8
+            ? Math.sin(travelProgress * Math.PI) * 2.5
             : 0
         const motionPhase = progress < anticipationEnd ? 'anticipate' : 'travel'
         element.dataset.motionPhase = motionPhase
-
         element.style.transform = `translate3d(${sample.x}px, ${sample.y - lift}px, 0)`
         element.dataset.direction = sample.direction
         element.style.zIndex = `${Math.floor(sample.y / 10) + 15}`
+        onDirectionChange?.(sample.direction.includes('W') ? 'left' : 'right')
 
         const shadow = element.querySelector('.trazo-companion-shadow') as HTMLElement | null
         if (shadow) {
-          const { scale, opacity } = calculateDecoupledShadow(lift)
-          const travelWeight = Math.sin(travelProgress * Math.PI)
-          const scaleX = scale * (motionPhase === 'anticipate' ? 0.92 : 1 + travelWeight * 0.12)
-          const scaleY = scale * (motionPhase === 'anticipate' ? 0.82 : 0.88)
-          const adjustedOpacity = opacity * (motionPhase === 'anticipate' ? 0.92 : 1 - travelWeight * 0.18)
-          shadow.style.transform = `translateX(-50%) scale(${scaleX}, ${scaleY})`
-          shadow.style.opacity = `${adjustedOpacity}`
+          const shadowPhysics = calculateDecoupledShadow(lift)
+          shadow.style.transform = `translateX(-50%) scale(${shadowPhysics.scale}, ${shadowPhysics.scale})`
+          shadow.style.opacity = `${shadowPhysics.opacity}`
         }
 
         if (progress < 1) {
@@ -150,10 +156,12 @@ export function useCompanionTraveler({
           element.dataset.state = 'idle'
           element.dataset.motionPhase = 'settle'
           element.dataset.contact = 'settled'
+          onMovingChange?.(false)
+          onDirectionChange?.('left')
           animFrameRef.current = null
           if (shadow) {
             shadow.style.transform = 'translateX(-50%) scale(1, 1)'
-            shadow.style.opacity = '0.45'
+            shadow.style.opacity = '0.75'
           }
           settleTimeoutRef.current = window.setTimeout(() => {
             if (containerRef.current === element) {
@@ -167,7 +175,7 @@ export function useCompanionTraveler({
 
       animFrameRef.current = requestAnimationFrame(step)
     },
-    [cancelTravel, containerRef, onTravelComplete, onTravelStart],
+    [cancelTravel, containerRef, onDirectionChange, onMovingChange, onTravelComplete, onTravelStart],
   )
 
   useEffect(() => {

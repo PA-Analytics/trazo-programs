@@ -13,9 +13,8 @@ export function ChapterNavigation({
 }: ChapterNavigationProps) {
   return (
     <nav className="chapter-navigation" aria-label="Capítulos del curso">
-      <div className="chapter-navigation__mark" aria-hidden="true">
-        <span />
-        <span />
+      <div className="chapter-navigation__mark" aria-label="TRAZO">
+        <span>TRAZO</span>
       </div>
       <div className="chapter-navigation__chapters">
         {course.chapters.map((chapter) => {

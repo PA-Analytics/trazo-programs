@@ -3,7 +3,7 @@ import { ChapterNavigation } from './components/ChapterNavigation'
 import { HudBar } from './components/HudBar'
 import { MissionPanel } from './components/MissionPanel'
 import { QuestMap } from './components/QuestMap'
-import { CreatorCalibrationView } from './components/CreatorCalibrationView'
+import { CoachCockpit } from './components/CoachCockpit'
 import { CoachIntro } from './components/CoachIntro'
 import { IdentityEntry } from './components/IdentityEntry'
 import { LearnerQuickSetup } from './components/LearnerQuickSetup'
@@ -560,10 +560,13 @@ export function App() {
   }
 
   if (profile.role === 'coach') {
-    const calibrationMission =
-      course.chapters[0].missions.find((mission) => mission.mapRole === 'entry') ??
-      course.chapters[0].missions[0]
-    return withProfileSwitcher(<CreatorCalibrationView userId={profile.userId} initialMode={profile.coachSetup?.calibrationMode} mission={calibrationMission} />)
+    return withProfileSwitcher(
+      <CoachCockpit
+        profile={profile}
+        course={course}
+        onSwitchProfile={() => setShowProfileSelection(true)}
+      />,
+    )
   }
 
   if (isLoading) {
@@ -594,7 +597,7 @@ export function App() {
     )
   }
 
-  if (!implementationState?.learnerSetup) {
+  if (profile.role === 'learner' && !implementationState?.learnerSetup) {
     return withProfileSwitcher(
       <LearnerQuickSetup
         userId={profile.userId}
@@ -624,6 +627,7 @@ export function App() {
           total={activeChapter.missions.length}
           activeMissionTitle={activeMission?.title}
           profile={profile}
+          learnerSetup={implementationState?.learnerSetup}
           onProfileOpen={() => setShowProfileSelection(true)}
           onRecenter={() => setRecenterRequest((request) => request + 1)}
         />

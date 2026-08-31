@@ -79,6 +79,14 @@ export class IdentityService {
     return profile
   }
 
+  async deleteProfile(userId: string): Promise<boolean> {
+    const normalized = normalizeUserId(userId)
+    const existing = await this.profiles.getById(normalized)
+    if (!existing) return false
+    await this.profiles.delete(normalized)
+    return true
+  }
+
   async setRole(userId: string, role: UserRole) {
     const profile = await this.requireProfile(userId)
     if (!VALID_ROLES.includes(role)) throw new Error('role is invalid')
@@ -133,6 +141,10 @@ export class IdentityService {
     const profile = await this.requireProfile(userId)
     if (profile.role !== role) throw new Error(`profile requires role '${role}'`)
     return profile
+  }
+
+  get repository(): IProfileRepository {
+    return this.profiles
   }
 
   private async requireProfile(userId: string) {

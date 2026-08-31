@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CalibrationExample, CalibrationVerdict, CreatorCalibration, Mission } from '../domain/course'
 import type { CalibrationMode } from '../domain/identity'
-import { RouteRail } from './RouteRail'
+import trazoLogoFullWhite from '../../trazo-logo-full-white.png'
+import { trazzCoachEvaluador } from '../assets/mascota-estados'
 
 interface CreatorCalibrationViewProps {
   mission: Mission
   userId?: string
   initialMode?: CalibrationMode
   onBack?: () => void
+  onEnterMap?: () => void
 }
 
-const verdicts: Array<{ value: CalibrationVerdict; label: string; detail: string }> = [
-  { value: 'PASS', label: 'PASS', detail: 'Satisface el estándar de la misión.' },
-  { value: 'REWORK', label: 'REWORK', detail: 'Se puede juzgar, pero todavía no alcanza el estándar.' },
-  { value: 'CLARIFY', label: 'CLARIFY', detail: 'Falta información o contexto para decidir responsablemente.' },
+const verdicts: Array<{ value: CalibrationVerdict; label: string; detail: string; keycap: string }> = [
+  { value: 'PASS', label: 'PASS', detail: 'Satisface el estándar exigido.', keycap: '1' },
+  { value: 'REWORK', label: 'REWORK', detail: 'Falta rigor o tiene AI-slop.', keycap: '2' },
+  { value: 'CLARIFY', label: 'CLARIFY', detail: 'Evidencia incontrastable.', keycap: '3' },
 ]
 
-export function CreatorCalibrationView({ mission, userId, initialMode = 'mixed_examples', onBack }: CreatorCalibrationViewProps) {
+export function CreatorCalibrationView({
+  mission,
+  userId,
+  initialMode = 'mixed_examples',
+  onBack,
+  onEnterMap,
+}: CreatorCalibrationViewProps) {
   const [calibration, setCalibration] = useState<CreatorCalibration | null>(null)
   const [standard, setStandard] = useState('')
   const [mode, setMode] = useState<'creator' | 'generated' | 'mixed'>(
@@ -136,277 +144,303 @@ export function CreatorCalibrationView({ mission, userId, initialMode = 'mixed_e
 
   if (isLoading) {
     return (
-      <main className="calibration-shell" aria-busy="true">
+      <main className="entry-shell coach-workbench-shell" aria-busy="true">
         <p className="calibration-status">Cargando datos de calibración para esta misión…</p>
       </main>
     )
   }
 
   return (
-    <main className="calibration-shell calibration-shell--route" aria-labelledby="calibration-title">
-      <RouteRail
-        label="Proceso de calibración"
-        stages={[
-          { label: 'Resultado', state: 'complete' },
-          { label: 'Evidencia', state: calibration ? 'complete' : 'current' },
-          { label: 'Calibración', state: calibration ? 'current' : 'future' },
-          { label: 'Juicio', state: 'future' },
-        ]}
-      />
-      <div className="calibration-route__content">
-      <header className="calibration-header">
-        {onBack && (
-          <button type="button" className="calibration-back" onClick={onBack}>
-            ← Volver al mapa
-          </button>
-        )}
-        <span className="setup-eyebrow">TRAZO · MODO CREADOR · CALIBRACIÓN DE ESTÁNDAR</span>
-        <h1 id="calibration-title">Enséñale a TRAZO cómo evalúas.</h1>
-        <p>
-          Muéstrame dónde dibujas la línea entre PASS, REWORK y CLARIFY. Tus ejemplos enseñan; no se convierten en una regla
-          sin tu confirmación.
-        </p>
-      </header>
-
-      <section className="calibration-mission" aria-labelledby="calibration-mission-title">
-        <span className="calibration-mission__eyebrow">Misión en calibración</span>
-        <h2 id="calibration-mission-title">{mission.title}</h2>
-        <p className="calibration-mission__desc">{mission.description}</p>
-        <div className="calibration-mission__prompt-box">
-          <strong>Evidencia esperada del estudiante:</strong>
-          <span>{mission.evidencePrompt}</span>
-        </div>
-      </section>
-
-      {error && (
-        <p className="setup-error" role="alert">
-          {error}
-        </p>
-      )}
-
-      {!calibration ? (
-        <section className="calibration-start" aria-labelledby="standard-title">
-          <div className="calibration-start__card">
-            <label htmlFor="initial-standard" id="standard-title" className="calibration-start__label">
-              ¿Qué tendría que tener una respuesta para que dijeras: “sí, esto está suficientemente bien”?
-            </label>
-            <p className="calibration-start__hint">
-              Escribe en tus palabras qué esperas ver en una entrega satisfactoria. Este estándar inicial guiará la generación de
-              hipótesis y la propuesta de criterios.
-            </p>
-            <textarea
-              id="initial-standard"
-              rows={4}
-              value={standard}
-              onChange={(event) => setStandard(event.target.value)}
-              placeholder="Por ejemplo: la idea es concreta, sé para quién es, incluye una señal verificable y no podría servirle igual a cualquiera…"
-            />
-            <button
-              type="button"
-              className="setup-primary"
-              disabled={!standard.trim() || busy}
-              onClick={() => void startCalibration()}
-            >
-              {busy ? 'Iniciando…' : 'Empezar calibración de esta misión'}
-            </button>
+    <main className="entry-shell coach-workbench-shell" aria-labelledby="calibration-workbench-title">
+      <div className="coach-workbench coach-workbench--calibration" data-testid="calibration-workbench">
+        <aside className="coach-step-hero">
+          <div className="coach-step-hero__brand">
+            <img className="coach-step-hero__logo" src={trazoLogoFullWhite} alt="TRAZO" />
+            <span className="coach-step-hero__tag">ESTUDIO DE CALIBRACIÓN</span>
           </div>
-        </section>
-      ) : (
-        <>
-          <section className="calibration-section" aria-labelledby="source-title">
-            <div className="calibration-section__heading">
-              <span className="calibration-section__index">01</span>
-              <div>
-                <h2 id="source-title">Elige cómo quieres calibrar</h2>
-                <p>Aporta tus propios ejemplos reales, genera hipótesis sintéticas de frontera, o combina ambos.</p>
-              </div>
+
+          <span className="setup-eyebrow">DIRECCIÓN PEDAGÓGICA</span>
+
+          <h1 id="calibration-workbench-title" className="coach-step-hero__title">
+            <span>FIJA TU UMBRAL</span>
+            <span>DE RIGOR</span>
+            <span className="coach-step-hero__title-accent">EN PIEDRA</span>
+          </h1>
+
+          <p className="coach-step-hero__desc">
+            Somete al evaluador a casos límite. Ningún estudiante avanzará sin superar la exigencia que marques aquí.
+          </p>
+
+          <div className="coach-calibration-mission-pill">
+            <span className="coach-calibration-mission-pill__tag">MISIÓN EN CALIBRACIÓN</span>
+            <strong className="coach-calibration-mission-pill__title">{mission.title}</strong>
+            <p className="coach-calibration-mission-pill__prompt">
+              <span className="coach-calibration-mission-pill__prompt-label">Evidencia: </span>
+              {mission.evidencePrompt}
+            </p>
+          </div>
+
+          <div className="coach-trazz-brief" aria-live="polite">
+            <img
+              src={trazzCoachEvaluador}
+              alt="Trazz Juez Curricular"
+              className="coach-trazz-brief__avatar"
+            />
+            <div className="coach-trazz-brief__text">
+              <strong>TRAZZ // JUEZ CURRICULAR</strong>
+              <p>
+                {!calibration
+                  ? 'Define el estándar innegociable. Con base en él someteremos a prueba casos reales y sintéticos.'
+                  : calibration.status === 'confirmed'
+                    ? '¡Rúbrica sellada con éxito! El motor evaluador ya está calibrado con tu nivel de rigor.'
+                    : 'Calibra cada caso de prueba para que aprenda exactamente dónde dibujas la línea.'}
+              </p>
             </div>
+          </div>
+        </aside>
 
-            <div className="calibration-mode" role="group" aria-label="Fuente de ejemplos">
-              {([
-                ['creator', 'Usar mis ejemplos'],
-                ['generated', 'Generar hipótesis'],
-                ['mixed', 'Mezclar ambos'],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className="calibration-mode__button"
-                  data-selected={mode === value}
-                  onClick={() => setMode(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {(mode === 'creator' || mode === 'mixed') && (
-              <div className="creator-example-entry">
-                <label htmlFor="creator-example">Pega o redacta un ejemplo real de respuesta:</label>
-                <textarea
-                  id="creator-example"
-                  rows={3}
-                  value={ownExample}
-                  onChange={(event) => setOwnExample(event.target.value)}
-                  placeholder={`Ejemplo de respuesta: ${mission.evidencePrompt}`}
-                />
-                <button
-                  type="button"
-                  className="setup-secondary"
-                  disabled={!ownExample.trim() || busy}
-                  onClick={() => void addOwnExample()}
-                >
-                  + Añadir mi ejemplo a la lista
-                </button>
+        <section className="coach-workbench__content" aria-label="Área de calibración de criterio">
+          {!calibration ? (
+            <>
+              <div className="coach-workbench__header">
+                <span className="coach-workbench__index">CALIBRACIÓN 01 · ESTÁNDAR INICIAL</span>
+                <h2 className="coach-workbench__heading">¿CUÁL ES EL ESTÁNDAR INNEGOCIABLE?</h2>
               </div>
-            )}
 
-            {(mode === 'generated' || mode === 'mixed') && (
-              <div className="generated-examples-trigger">
+              <div className="coach-workbench__body">
+                <div className="coach-input-block">
+                  <label htmlFor="initial-standard" className="coach-input-block__label">
+                    Describe qué separa una entrega aceptable de una superficial o genérica
+                  </label>
+                  <textarea
+                    id="initial-standard"
+                    className="coach-textarea"
+                    rows={5}
+                    maxLength={500}
+                    value={standard}
+                    onChange={(e) => setStandard(e.target.value)}
+                    placeholder="Ejemplo: La entrega debe ser concreta, resolver el problema sin relleno teórico, incluir datos verificables y no sonar a texto genérico generado por IA."
+                    autoFocus
+                  />
+                  <div className="coach-input-block__footer">
+                    <span className="coach-input-block__hint">Sé riguroso: guiará la generación de hipótesis y criterios.</span>
+                    <span className="coach-input-block__counter">{standard.length} / 500</span>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="setup-error" role="alert">
+                  {error}
+                </div>
+              )}
+
+              <footer className="coach-workbench__actions">
+                {onBack && (
+                  <button type="button" className="setup-secondary coach-action-btn" onClick={onBack}>
+                    ← Volver
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="setup-secondary"
-                  disabled={busy}
-                  onClick={() => void generateExamples()}
+                  className="setup-primary coach-action-btn"
+                  disabled={!standard.trim() || busy}
+                  onClick={() => void startCalibration()}
                 >
-                  Generar tres casos de frontera para juzgar
+                  {busy ? 'Iniciando…' : 'Iniciar Ronda de Calibración →'}
                 </button>
-              </div>
-            )}
-          </section>
-
-          <section className="calibration-section" aria-labelledby="examples-title">
-            <div className="calibration-section__heading">
-              <span className="calibration-section__index">02</span>
-              <div className="calibration-section__title-group">
-                <div className="calibration-section__title-row">
-                  <h2 id="examples-title">Dibuja la línea</h2>
-                  <span className="calibration-judged-counter" aria-live="polite">
-                    {judgedCount} de {calibration.examples.length} juzgados
+              </footer>
+            </>
+          ) : (
+            <>
+              <div className="coach-workbench__header">
+                <div className="coach-workbench__header-split">
+                  <div>
+                    <span className="coach-workbench__index">CALIBRACIÓN 02 · CASOS DE PRUEBA</span>
+                    <h2 className="coach-workbench__heading">DIBUJA LA LÍNEA DEL VEREDICTO</h2>
+                  </div>
+                  <span className="coach-judged-badge" aria-live="polite">
+                    {judgedCount} / {calibration.examples.length} CALIBRADOS
                   </span>
                 </div>
-                <p>
-                  Cada caso necesita tu veredicto y el motivo. Los generados están marcados como hipótesis de calibración, no
-                  como verdad oficial.
-                </p>
               </div>
-            </div>
 
-            {calibration.examples.length === 0 ? (
-              <div className="calibration-empty">
-                <p>Aún no hay ejemplos en la lista. Añade uno propio arriba o genera casos para empezar a calibrar.</p>
-              </div>
-            ) : (
-              <div className="calibration-examples">
-                {calibration.examples.map((example, index) => (
-                  <CalibrationExampleItem
-                    key={example.id}
-                    example={example}
-                    index={index}
-                    busy={busy}
-                    onJudge={judge}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="calibration-section" aria-labelledby="criteria-title">
-            <div className="calibration-section__heading">
-              <span className="calibration-section__index">03</span>
-              <div>
-                <h2 id="criteria-title">Revisa una primera propuesta de criterios</h2>
-                <p>La propuesta sale de tu estándar. Tus veredictos aportan el contexto necesario para revisarla.</p>
-              </div>
-            </div>
-
-            {!calibration.proposedRubric ? (
-              <div className="criteria-propose-card">
-                <p className="criteria-propose-card__hint">
-                  {judgedCount === 0
-                    ? 'Juzga al menos un caso arriba para habilitar la propuesta de criterios.'
-                    : `Has juzgado ${judgedCount} caso${judgedCount > 1 ? 's' : ''}. Ya puedes generar una propuesta.`}
-                </p>
-                <button
-                  type="button"
-                  className="setup-primary"
-                  disabled={judgedCount === 0 || busy}
-                  onClick={() => void propose()}
-                >
-                  Proponer criterios
-                </button>
-              </div>
-            ) : (
-              <div className="criteria-review">
-                <div
-                  className="criteria-proposal-banner"
-                  data-status={calibration.status}
-                  role="region"
-                  aria-label="Estado de la propuesta de criterios"
-                >
-                  <div className="criteria-proposal-banner__badge">
-                    {calibration.status === 'confirmed' ? '✓ RÚBRICA CONFIRMADA' : 'PROPOSAL · PROPUESTA INTERPRETADA'}
+              <div className="coach-workbench__body coach-calibration-scroll-body">
+                <div className="coach-calibration-controls">
+                  <div className="coach-mode-pills" role="group" aria-label="Modo de ejemplos">
+                    {([
+                      ['mixed', 'Combinar'],
+                      ['generated', 'Hipótesis'],
+                      ['creator', 'Propios'],
+                    ] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        className="coach-mode-pill"
+                        data-selected={mode === val}
+                        onClick={() => setMode(val)}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                  <p className="criteria-proposal-banner__text">
-                    {calibration.status === 'confirmed'
-                      ? 'Estos criterios ya están activos y se aplicarán a las entregas de esta misión. Puedes ajustar las descripciones y volver a confirmar si lo necesitas.'
-                      : 'TRAZO propone esta interpretación a partir de tu estándar. Tus veredictos no se convierten automáticamente en criterios. Edita los campos de abajo antes de confirmar; nada se aplicará a los estudiantes hasta que confirmes.'}
-                  </p>
+
+                  {(mode === 'generated' || mode === 'mixed') && (
+                    <button
+                      type="button"
+                      className="setup-secondary coach-action-btn coach-action-btn--sm"
+                      disabled={busy}
+                      onClick={() => void generateExamples()}
+                    >
+                      {busy ? 'Generando casos…' : 'Generar casos de prueba'}
+                    </button>
+                  )}
                 </div>
 
-                <div className="criteria-list" role="group" aria-label="Lista de criterios propuestos">
-                  {calibration.proposedRubric.criteria.map((criterion, index) => (
-                    <label key={criterion.id} htmlFor={`criterion-${criterion.id}`} className="criteria-item">
-                      <span className="criteria-item__number">{String(index + 1).padStart(2, '0')}</span>
-                      <div className="criteria-item__field">
-                        <span className="criteria-item__label">Criterio {index + 1}</span>
-                        <input
-                          id={`criterion-${criterion.id}`}
-                          value={editingCriteria[index] ?? criterion.description}
-                          onChange={(event) =>
-                            setEditingCriteria((current) =>
-                              current.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)),
-                            )
-                          }
-                          placeholder="Descripción del criterio..."
-                        />
-                      </div>
+                {(mode === 'creator' || mode === 'mixed') && (
+                  <div className="coach-add-example-block">
+                    <label htmlFor="creator-example" className="coach-input-block__label">
+                      Añadir caso de prueba real
                     </label>
-                  ))}
+                    <textarea
+                      id="creator-example"
+                      className="coach-textarea coach-textarea--sm"
+                      rows={2}
+                      value={ownExample}
+                      onChange={(e) => setOwnExample(e.target.value)}
+                      placeholder={`Pega una entrega de ejemplo para: ${mission.evidencePrompt}`}
+                    />
+                    <button
+                      type="button"
+                      className="setup-secondary coach-action-btn coach-action-btn--sm"
+                      disabled={!ownExample.trim() || busy}
+                      onClick={() => void addOwnExample()}
+                    >
+                      + Añadir Caso a la Ronda
+                    </button>
+                  </div>
+                )}
+
+                <div className="coach-examples-stack">
+                  {calibration.examples.length === 0 ? (
+                    <div className="coach-calibration-empty">
+                      <p>
+                        Aún no hay casos en la ronda. Pulsa <strong>Generar casos de prueba</strong> o añade uno propio arriba.
+                      </p>
+                    </div>
+                  ) : (
+                    calibration.examples.map((example, index) => (
+                      <CalibrationExampleItem
+                        key={example.id}
+                        example={example}
+                        index={index}
+                        busy={busy}
+                        onJudge={judge}
+                      />
+                    ))
+                  )}
                 </div>
 
-                <div className="criteria-semantics" role="note">
-                  <strong>Cómo se aplicará esta rúbrica:</strong>
-                  <ul>
-                    <li>
-                      <strong>CLARIFY:</strong> si falta información o la evidencia es incontrastable.
-                    </li>
-                    <li>
-                      <strong>REWORK:</strong> si la evidencia se puede juzgar pero no alcanza algún criterio requerido.
-                    </li>
-                    <li>
-                      <strong>PASS:</strong> si la evidencia satisface todos los criterios obligatorios.
-                    </li>
-                  </ul>
-                </div>
+                <div className="coach-criteria-section">
+                  <div className="coach-criteria-section__header">
+                    <span className="coach-workbench__index">ESTÁNDAR OFICIAL</span>
+                    <h3 className="coach-criteria-section__title">PLIEGO DE CRITERIOS RESULTANTES</h3>
+                  </div>
 
-                <button
-                  type="button"
-                  className="setup-primary"
-                  disabled={busy || editingCriteria.some((item) => !item.trim())}
-                  onClick={() => void confirm()}
-                >
-                  {busy
-                    ? 'Guardando…'
-                    : calibration.status === 'confirmed'
-                      ? 'Criterios confirmados ✓'
-                      : 'Confirmar criterios oficiales'}
-                </button>
+                  {!calibration.proposedRubric ? (
+                    <div className="coach-criteria-prompt-box">
+                      <p>
+                        {judgedCount === 0
+                          ? 'Calibra al menos 1 caso arriba para sintetizar tu pliego de criterios.'
+                          : `Has calibrado ${judgedCount} caso${judgedCount > 1 ? 's' : ''}. Ya puedes sintetizar la rúbrica oficial.`}
+                      </p>
+                      <button
+                        type="button"
+                        className="setup-primary coach-action-btn"
+                        disabled={judgedCount === 0 || busy}
+                        onClick={() => void propose()}
+                      >
+                        Sintetizar Criterios de Evaluación →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="coach-criteria-confirmed-box">
+                      <div
+                        className="coach-criteria-badge-banner"
+                        data-status={calibration.status}
+                      >
+                        <span className="coach-criteria-badge-banner__status">
+                          {calibration.status === 'confirmed' ? '✓ RÚBRICA ACTIVA Y SELLADA' : 'PROPUESTA DE CRITERIOS'}
+                        </span>
+                        <small className="coach-criteria-badge-banner__desc">
+                          {calibration.status === 'confirmed'
+                            ? 'Estos criterios se aplicarán de forma determinista a las entregas de los estudiantes.'
+                            : 'Revisa y ajusta la redacción antes de confirmar.'}
+                        </small>
+                      </div>
+
+                      <div className="coach-criteria-list">
+                        {calibration.proposedRubric.criteria.map((criterion, index) => (
+                          <div key={criterion.id} className="coach-criterion-row">
+                            <span className="coach-criterion-num">0{index + 1}</span>
+                            <input
+                              type="text"
+                              className="coach-criterion-input"
+                              value={editingCriteria[index] ?? criterion.description}
+                              onChange={(e) =>
+                                setEditingCriteria((current) =>
+                                  current.map((item, i) => (i === index ? e.target.value : item)),
+                                )
+                              }
+                              placeholder="Descripción del criterio..."
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {calibration.status === 'confirmed' ? (
+                        <div className="coach-confirmed-actions-row">
+                          <button
+                            type="button"
+                            className="setup-secondary coach-action-btn coach-action-btn--sm"
+                            disabled={busy || editingCriteria.some((item) => !item.trim())}
+                            onClick={() => void confirm()}
+                          >
+                            {busy ? 'Guardando…' : 'Actualizar Criterios'}
+                          </button>
+                          {onEnterMap && (
+                            <button
+                              type="button"
+                              className="setup-primary coach-action-btn"
+                              onClick={onEnterMap}
+                            >
+                              Entrar al Mapa de Ruta →
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="setup-primary coach-action-btn"
+                          disabled={busy || editingCriteria.some((item) => !item.trim())}
+                          onClick={() => void confirm()}
+                        >
+                          {busy ? 'Guardando…' : 'Confirmar y Sellar Rúbrica Oficial →'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </section>
-        </>
-      )}
+
+              {error && (
+                <div className="setup-error" role="alert">
+                  {error}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
     </main>
   )
@@ -429,86 +463,85 @@ function CalibrationExampleItem({
   const isUnsaved = verdict !== (example.verdict ?? '') || reason !== (example.reason ?? '')
 
   return (
-    <article className="calibration-example" data-source={example.source} data-judged={isJudged}>
-      <div className="calibration-example__source-row">
-        <span className="calibration-example__step-tag">Paso {index + 1} · Origen</span>
-        <div className="calibration-example__source-badges">
-          <span className="calibration-source-badge" data-source={example.source}>
-            {example.source === 'generated' ? 'Hipótesis sintética' : 'Ejemplo del creador'}
+    <article className="coach-example-card" data-source={example.source} data-judged={isJudged}>
+      <div className="coach-example-card__header">
+        <span className="coach-example-card__waypoint">0{index + 1}</span>
+        <div className="coach-example-card__badges">
+          <span className="coach-example-badge" data-source={example.source}>
+            {example.source === 'generated' ? 'CASO DE PRUEBA SINTÉTICO' : 'CASO REAL DEL COACH'}
           </span>
           {example.caseQuality && (
-            <span className="calibration-quality-badge" data-quality={example.caseQuality}>
+            <span className="coach-quality-badge" data-quality={example.caseQuality}>
               {example.caseQuality === 'clear_pass'
-                ? 'Caso generado · PASS claro'
+                ? 'PASS MODELO'
                 : example.caseQuality === 'clear_rework'
-                  ? 'Caso generado · REWORK claro'
-                  : 'Caso generado · Frontera / Límite'}
+                  ? 'REWORK (PRUEBA ANTI-SLOP)'
+                  : 'CASO FRONTERA'}
             </span>
           )}
         </div>
       </div>
 
-      <div className="calibration-example__submission-block">
-        <span className="calibration-example__section-label">Respuesta a evaluar (Submission):</span>
-        <blockquote className="calibration-example__submission-quote">
+      <div className="coach-example-card__submission">
+        <span className="coach-example-card__sub-label">ENTREGA DEL ESTUDIANTE:</span>
+        <blockquote className="coach-example-card__quote">
           <p>{example.submission}</p>
         </blockquote>
       </div>
 
-      <div className="calibration-example__verdict-block">
-        <fieldset className="calibration-verdict-fieldset">
-          <legend className="calibration-example__section-label">Tu veredicto como creador:</legend>
-          <div className="verdict-options" role="radiogroup" aria-label={`Veredicto para caso ${index + 1}`}>
-            {verdicts.map((option) => (
-              <label
-                key={option.value}
-                className="verdict-option"
-                data-verdict={option.value}
-                data-selected={verdict === option.value}
-              >
-                <input
-                  type="radio"
-                  name={`verdict-${example.id}`}
-                  value={option.value}
-                  checked={verdict === option.value}
-                  onChange={() => setVerdict(option.value)}
-                />
-                <span className="verdict-option__header">
-                  <span className="verdict-option__indicator" aria-hidden="true" />
-                  <strong className="verdict-option__name">{option.label}</strong>
-                </span>
-                <small className="verdict-option__detail">{option.detail}</small>
-              </label>
-            ))}
+      <div className="coach-example-card__verdict-area">
+        <fieldset className="coach-verdict-fieldset">
+          <legend className="coach-example-card__sub-label">VEREDICTO DEL COACH:</legend>
+          <div className="coach-verdict-options" role="radiogroup" aria-label={`Veredicto para caso ${index + 1}`}>
+            {verdicts.map((option) => {
+              const isSelected = verdict === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  className="coach-verdict-btn"
+                  data-verdict={option.value}
+                  data-selected={isSelected}
+                  onClick={() => setVerdict(option.value)}
+                >
+                  <span className="coach-verdict-btn__dot" aria-hidden="true" />
+                  <strong className="coach-verdict-btn__name">{option.label}</strong>
+                  <small className="coach-verdict-btn__detail">{option.detail}</small>
+                </button>
+              )
+            })}
           </div>
         </fieldset>
       </div>
 
-      <div className="calibration-example__reason-block">
-        <label htmlFor={`reason-${example.id}`} className="calibration-example__section-label">
-          ¿Por qué diste este veredicto? <span className="calibration-required-mark">*</span>
+      <div className="coach-example-card__reason-area">
+        <label htmlFor={`reason-${example.id}`} className="coach-example-card__sub-label">
+          ¿POR QUÉ DISTE ESTE VEREDICTO? <span className="calibration-required-mark">*</span>
         </label>
         <textarea
           id={`reason-${example.id}`}
+          className="coach-textarea coach-textarea--sm"
           rows={2}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          placeholder="Explica qué viste, qué faltó o qué criterio específico determinó tu decisión…"
+          placeholder="Explica qué faltó o qué destreza específica justificó este resultado…"
         />
       </div>
 
-      <div className="calibration-example__action-row">
+      <div className="coach-example-card__footer">
         <button
           type="button"
-          className="setup-secondary"
+          className="setup-secondary coach-action-btn coach-action-btn--sm"
           disabled={!verdict || !reason.trim() || busy}
           onClick={() => void onJudge(example, verdict as CalibrationVerdict, reason)}
         >
-          {busy ? 'Guardando…' : isJudged && !isUnsaved ? 'Veredicto guardado ✓' : 'Guardar veredicto'}
+          {busy ? 'Guardando…' : isJudged && !isUnsaved ? 'Veredicto Guardado ✓' : 'Guardar Veredicto'}
         </button>
         {isJudged && (
-          <span className="calibration-saved-notice" aria-live="polite">
-            {isUnsaved ? 'Cambios pendientes de guardar' : `Guardado como ${example.verdict}`}
+          <span className="coach-example-saved-tag" aria-live="polite">
+            {isUnsaved ? 'Cambios pendientes' : `Fijado como ${example.verdict}`}
           </span>
         )}
       </div>

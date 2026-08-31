@@ -53,12 +53,12 @@ function normalizeText(value: unknown, field: string) {
  */
 function generatedSubmission(mission: Mission, quality: CalibrationCaseQuality) {
   if (quality === 'clear_pass') {
-    return `Trabajo de ejemplo para ${mission.title}: cumple directamente lo que pide la misión (${mission.evidencePrompt}) sin información de más.`
+    return `Propuesta concreta para ${mission.title}: define una solución medible, responde exactamente al prompt (${mission.evidencePrompt}) e incluye métricas verificables sin relleno.`
   }
   if (quality === 'clear_rework') {
-    return `Una idea general para mejorar, todavía sin concretar.`
+    return `Solución de transformación digital para ${mission.title}: potenciaremos de forma holística las sinergias estratégicas con un enfoque ágil e innovador para maximizar el valor exponencial del ecosistema.`
   }
-  return `Avance parcial sobre ${mission.title.toLocaleLowerCase('es-MX')}: falta definir un detalle antes de estar completo.`
+  return `Avance preliminar sobre ${mission.title}: describe la idea central pero omite el dato operativo y la restricción clave para considerarse listo para producción.`
 }
 
 function splitStandardCriteria(text: string) {

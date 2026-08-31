@@ -23,6 +23,9 @@ export interface QuestNodeData extends Record<string, unknown> {
   entryOrder?: number
   entryLocked?: boolean
   entryFocus?: boolean
+  entryRoute?: boolean
+  entryRevealed?: boolean
+  entryCurrent?: boolean
   onSelect: (missionId: string) => void
   onHover: (missionId: string | null) => void
 }
@@ -43,6 +46,9 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
     entryOrder,
     entryLocked,
     entryFocus,
+    entryRoute,
+    entryRevealed,
+    entryCurrent,
     onSelect,
     onHover,
   } = data
@@ -77,6 +83,9 @@ export const QuestNode = memo(function QuestNode({ data }: NodeProps<QuestFlowNo
       data-companion-contact={companionContact ?? false}
       data-entry-order={entryOrder ?? 0}
       data-entry-focus={entryFocus ?? false}
+      data-entry-route={entryRoute ?? false}
+      data-entry-revealed={entryRevealed ?? false}
+      data-entry-current={entryCurrent ?? false}
       data-detail={detailLevel}
       data-role={mission.mapRole}
       style={{ '--entry-delay': `${Math.min((entryOrder ?? 0) * 90, 720)}ms` } as CSSProperties}

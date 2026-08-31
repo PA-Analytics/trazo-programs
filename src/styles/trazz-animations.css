@@ -1,0 +1,148 @@
+/* ==========================================================================
+   TRAZZ CHARACTER — Animated Companion Keyframes & Materiality
+   ========================================================================== */
+
+.trazz-character-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Orientación direccional */
+.trazz-character-wrapper[data-facing="left"] {
+  transform: scaleX(1);
+}
+
+.trazz-character-wrapper[data-facing="right"] {
+  transform: scaleX(-1);
+}
+
+/* Sombra de oclusión y elevación en el render del personaje */
+.trazz-character-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  will-change: transform, opacity;
+}
+
+/* Transición de crossfade suave entre emociones */
+.trazz-character-wrapper[data-transitioning="true"] img {
+  opacity: 0.15;
+  transition: opacity 120ms ease-in;
+}
+
+.trazz-character-wrapper[data-transitioning="false"] img {
+  opacity: 1;
+  transition: opacity 180ms ease-out;
+}
+
+/* Animaciones por estado */
+.trazz-character-wrapper[data-state="idle"] img {
+  animation: trazz-float 3s ease-in-out infinite;
+}
+
+.trazz-character-wrapper[data-state="thinking"] img {
+  animation: trazz-sway 2s ease-in-out infinite;
+}
+
+.trazz-character-wrapper[data-state="annotating"] img {
+  animation: trazz-jot 0.42s ease-in-out infinite;
+}
+
+.trazz-character-wrapper[data-state="surprised"] img {
+  animation: trazz-shake 0.5s ease-in-out;
+}
+
+.trazz-character-wrapper[data-state="celebrate"] img {
+  animation: trazz-bounce 0.6s ease-out infinite;
+}
+
+.trazz-character-wrapper[data-state="walking"] img {
+  animation: trazz-walk 0.5s ease-in-out infinite;
+}
+
+/* Keyframes */
+@keyframes trazz-float {
+  0%, 100% {
+    transform: translateY(-3px);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@keyframes trazz-sway {
+  0%, 100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes trazz-jot {
+  0%, 100% {
+    transform: translateY(0) rotate(-0.5deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(0.5deg);
+  }
+}
+
+@keyframes trazz-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px) scale(1.04);
+  }
+  40% {
+    transform: translateX(4px) scale(1.04);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes trazz-walk {
+  0% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(0) rotate(2deg);
+  }
+  75% {
+    transform: translateY(-5px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+}
+
+@keyframes trazz-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-16px) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trazz-character-wrapper img {
+    animation: none !important;
+  }
+}

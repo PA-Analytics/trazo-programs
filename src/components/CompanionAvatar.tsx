@@ -12,6 +12,7 @@ import {
 import type { CompassDirection8, CompanionState } from '../domain/companion'
 import type { MapPosition, Mission, NextActionProposal, NextActionTurn } from '../domain/course'
 import { useCompanionTraveler } from '../hooks/useCompanionTraveler'
+import { TrazzCharacter, type TrazzEmotion, type TrazzFacing } from './TrazzCharacter'
 
 export interface CompanionHandle {
   moveToNode: (svgPathData: string, targetMissionId: string) => void
@@ -93,6 +94,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
     const [tapReaction, setTapReaction] = useState<string | null>(null)
     const [verifiedCueActive, setVerifiedCueActive] = useState(false)
     const [stateOverride, setStateOverride] = useState<CompanionState | null>(null)
+    const [isMoving, setIsMoving] = useState(false)
+    const [facing, setFacing] = useState<TrazzFacing>('left')
     const lastTapTimeRef = useRef<number>(0)
     const tapTimeoutRef = useRef<number | null>(null)
     const verifiedTimeoutRef = useRef<number | null>(null)
@@ -121,6 +124,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
     const handleTravelStart = useCallback(
       (targetMissionId: string) => {
         setIsOpen(false)
+        setIsMoving(true)
         onTravelStart?.(targetMissionId)
       },
       [onTravelStart],
@@ -128,16 +132,28 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
 
     const handleTravelArrival = useCallback(
       (targetMissionId: string) => {
+        setIsMoving(false)
+        setFacing('left')
         onTravelComplete?.(targetMissionId)
         onSelectMission(targetMissionId)
       },
       [onSelectMission, onTravelComplete],
     )
 
+    const handleDirectionChange = useCallback((newFacing: TrazzFacing) => {
+      setFacing(newFacing)
+    }, [])
+
+    const handleMovingChange = useCallback((moving: boolean) => {
+      setIsMoving(moving)
+    }, [])
+
     const { travelAlongPath, teleportTo, cancelTravel } = useCompanionTraveler({
       containerRef,
       onTravelStart: handleTravelStart,
       onTravelComplete: handleTravelArrival,
+      onDirectionChange: handleDirectionChange,
+      onMovingChange: handleMovingChange,
     })
 
     // Exponer métodos imperativos vía ref
@@ -246,7 +262,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
       }
     }, [isVerifiedAction])
 
-    // Determinar el estado visual
+    // Determinar el estado visual y la emoción de Trazz
     const visualState: CompanionState =
       stateOverride ??
       (verifiedCueActive
@@ -256,6 +272,19 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
           : proposal?.type === 'ASK_CLARIFICATION' || proposal?.type === 'RECOMMEND_MISSION'
             ? 'attention'
             : 'idle')
+
+    const characterEmotion: TrazzEmotion =
+      isMoving
+        ? 'walking'
+        : isSquished
+          ? 'surprised'
+          : verifiedCueActive || visualState === 'verified'
+            ? 'celebrate'
+            : isEvaluating
+              ? 'annotating'
+              : visualState === 'thinking' || isLoading
+                ? 'thinking'
+                : 'idle'
 
     // Sincronizar dataset del estado cuando no está en movimiento
     useEffect(() => {
@@ -364,6 +393,16 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
     const contextMission =
       availableMissions.find((mission) => mission.id === activeMissionId) ?? availableMissions[0]
 
+    const isInitializedRef = useRef(false)
+
+    useEffect(() => {
+      if (!isInitializedRef.current && containerRef.current) {
+        isInitializedRef.current = true
+        containerRef.current.style.transform = `translate3d(${initialPosition.x}px, ${initialPosition.y}px, 0)`
+        containerRef.current.style.zIndex = `${Math.floor(initialPosition.y / 10) + 15}`
+      }
+    }, [initialPosition])
+
     return (
       <div
         ref={containerRef}
@@ -373,10 +412,6 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
         data-open={isOpen}
         data-motion-phase="settled"
         data-contact="settled"
-        style={{
-          transform: `translate3d(${initialPosition.x}px, ${initialPosition.y}px, 0)`,
-          zIndex: Math.floor(initialPosition.y / 10) + 15,
-        }}
         onClick={stopPointerEvent}
         onPointerDown={stopPointerEvent}
         onMouseDown={stopPointerEvent}
@@ -397,24 +432,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
           {/* Anillo exterior Modo TRAZO */}
           <div className="trazo-companion-halo" aria-hidden="true" />
 
-          {/* Sprite Vectorial de TRAZO con antena, brújula y ojos */}
-          <div className="trazo-companion-figure" aria-hidden="true">
-            {/* Antena orientable */}
-            <div className="trazo-figure-antenna">
-              <span className="trazo-antenna-tip" />
-            </div>
-
-            {/* Cabeza / Cuerpo de cartógrafo */}
-            <div className="trazo-figure-torso">
-              {/* Ojos expresivos con tracking direccional */}
-              <div className="trazo-figure-eyes">
-                <span className="trazo-eye left" />
-                <span className="trazo-eye right" />
-              </div>
-              {/* Dial central / Brújula de cobalto */}
-              <div className="trazo-figure-compass" />
-            </div>
-          </div>
+          {/* Personaje Animado Oficial de TRAZO */}
+          <TrazzCharacter state={characterEmotion} facing={facing} />
 
           {/* Cue de Atención ("Tengo una duda" / "Vamos por aquí") */}
           {visualState === 'attention' && !isOpen && (
@@ -440,7 +459,6 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
           )}
         </button>
 
-        {/* Panel Compacto Anclado de Conversación */}
         {isOpen && (
           <aside
             ref={panelRef}
@@ -451,11 +469,8 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
             onPointerDown={stopPointerEvent}
             onMouseDown={stopPointerEvent}
           >
-            <div className="trazo-panel-header">
-              <div className="trazo-panel-title-group">
-                <span className="trazo-panel-badge">Acompañante</span>
-                <h4>TRAZO</h4>
-              </div>
+            <div className="trazo-thought-bubble__signature">
+              <span>TRAZZ</span>
               <button
                 type="button"
                 className="trazo-panel-close-btn"
@@ -472,7 +487,7 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
                   {decisionTurns.map((turn, index) => (
                     <li key={`${turn.role}-${index}`} data-role={turn.role}>
                       <span className="trazo-turn-speaker">
-                        {turn.role === 'companion' ? 'TRAZO' : 'Tú'}
+                        {turn.role === 'companion' ? 'TRAZZ' : 'Tú'}
                       </span>
                       <p>{turn.content}</p>
                     </li>
@@ -527,23 +542,6 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
               {!isLoading && proposal?.type === 'ASK_CLARIFICATION' && (
                 <div className="trazo-panel-clarification">
                   <p className="trazo-clarification-prompt">{proposal.question}</p>
-                  <form onSubmit={handleClarificationSubmit} className="trazo-clarification-form">
-                    <input
-                      type="text"
-                      className="trazo-clarification-input"
-                      placeholder="Responde a TRAZO..."
-                      value={clarificationAnswer}
-                      onChange={(e) => setClarificationAnswer(e.target.value)}
-                      autoFocus
-                    />
-                    <button
-                      type="submit"
-                      className="trazo-clarification-submit"
-                      disabled={!clarificationAnswer.trim() || isLoading}
-                    >
-                      Enviar
-                    </button>
-                  </form>
                 </div>
               )}
 
@@ -565,6 +563,34 @@ export const CompanionAvatar = forwardRef<CompanionHandle, CompanionAvatarProps>
                     {isStarting ? 'Entrando...' : 'Ir a esta ruta →'}
                   </button>
                 </div>
+              )}
+
+              {!isLoading && !error && (
+                <form onSubmit={handleClarificationSubmit} className="trazo-clarification-form trazo-thought-question">
+                  <label className="visually-hidden" htmlFor="trazz-question">
+                    Pregunta a Trazz
+                  </label>
+                  <input
+                    id="trazz-question"
+                    type="text"
+                    className="trazo-clarification-input"
+                    placeholder={
+                      proposal?.type === 'ASK_CLARIFICATION'
+                        ? 'Responde a Trazz…'
+                        : 'Pregúntame sobre este paso…'
+                    }
+                    value={clarificationAnswer}
+                    onChange={(event) => setClarificationAnswer(event.target.value)}
+                    autoFocus={proposal?.type === 'ASK_CLARIFICATION'}
+                  />
+                  <button
+                    type="submit"
+                    className="trazo-clarification-submit"
+                    disabled={!clarificationAnswer.trim()}
+                  >
+                    Preguntar
+                  </button>
+                </form>
               )}
             </div>
           </aside>

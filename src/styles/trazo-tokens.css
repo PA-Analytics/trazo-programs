@@ -38,6 +38,24 @@
   --trazo-optional: var(--trazo-stone);
   --trazo-milestone: var(--trazo-indigo);
 
+  /* Canonical Evaluation & Verdict Palette ("La Tríada de Acentos") */
+  --trazo-pass: var(--trazo-indigo);
+  --trazo-pass-soft: var(--trazo-indigo-light);
+  --trazo-rework: #d97706;
+  --trazo-rework-bg: #fef3c7;
+  --trazo-rework-border: #f59e0b;
+  --trazo-rework-text: #92400e;
+  --trazo-rework-badge: #fbbf24;
+  --trazo-rework-shadow: #d97706;
+  --trazo-clarify: var(--trazo-stone-dark);
+  --trazo-clarify-bg: color-mix(in srgb, var(--trazo-paper) 25%, var(--trazo-ink));
+
+  /* El Rojo God: Destructivo, Alerta Crítica y Bloqueo */
+  --trazo-crimson: #e53935;
+  --trazo-crimson-bright: #ff453a;
+  --trazo-crimson-bg: color-mix(in srgb, #e53935 8%, var(--trazo-ink));
+  --trazo-crimson-shadow: #8b0000;
+
   --trazo-font-display: Anton, "Arial Narrow", sans-serif;
   --trazo-font-ui: Geist, ui-sans-serif, system-ui, sans-serif;
 

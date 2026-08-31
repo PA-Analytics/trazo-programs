@@ -15,10 +15,14 @@ import { adaptMethodologyGraphToCourse } from '../domain/methodologyAdapter.ts'
 import type { MethodologyGraphRuntime } from '../domain/methodologyRuntime.ts'
 import type { EvidenceEvaluatorService } from './evaluator/evaluatorService.ts'
 import type {
+  CohortLearnerSummary,
+  CohortOverviewResponseDTO,
   CreateImplementationDTO,
   DevCompleteMissionDTO,
   ICalibrationRepository,
   IImplementationRepository,
+  IProfileRepository,
+  LearnerHealthStatus,
   LearnerSetupDTO,
   StartMissionDTO,
   SubmissionResponseDTO,
@@ -790,5 +794,120 @@ export class ImplementationService {
       await this.repository.save(state)
       return state
     })
+  }
+
+  /**
+   * Returns a structured overview of all learners associated with the coach.
+   * Calculates health status, completion progress, stall alerts, and pending human review cases.
+   */
+  async getCohortOverview(coachId?: string, profileRepository?: IProfileRepository): Promise<CohortOverviewResponseDTO> {
+    const allImplementations = await this.repository.list()
+    const allProfiles = profileRepository ? await profileRepository.list() : []
+    const profileMap = new Map(allProfiles.map((p) => [p.userId, p]))
+
+    const coachImplementations = allImplementations.filter((impl) => {
+      if (impl.userId && profileMap.get(impl.userId)?.role === 'coach') {
+        return false
+      }
+      if (coachId) {
+        return impl.coachId === coachId || !impl.coachId
+      }
+      return true
+    })
+
+    const cohort: CohortLearnerSummary[] = coachImplementations.map((impl) => {
+      const course = resolvePack(impl.courseId || DEFAULT_PACK_ID)
+      const allMissions = course.chapters.flatMap((c) => c.missions)
+      const totalMissions = allMissions.length
+      const completedCount = impl.completedMissionIds?.length ?? 0
+      const progressPercentage = totalMissions > 0 ? Math.round((completedCount / totalMissions) * 100) : 0
+
+      const activeMission = allMissions.find((m) => m.id === impl.activeMissionId)
+      const userProfile = impl.userId ? profileMap.get(impl.userId) : undefined
+      const displayName = userProfile?.displayName || impl.userId || `Alumno ${impl.id.slice(-4)}`
+
+      // Calculate health status based on evaluation provenance
+      const provenance = impl.evaluationProvenance ?? []
+      const activeMissionProvenance = impl.activeMissionId
+        ? provenance.filter((p) => p.missionId === impl.activeMissionId)
+        : []
+
+      // Count consecutive reworks on active mission
+      let consecutiveReworks = 0
+      for (let i = activeMissionProvenance.length - 1; i >= 0; i--) {
+        if (activeMissionProvenance[i].policyVerdict === 'REWORK') {
+          consecutiveReworks++
+        } else {
+          break
+        }
+      }
+
+      let healthStatus: LearnerHealthStatus = 'healthy'
+      const latestVerdict = provenance[provenance.length - 1]?.policyVerdict
+
+      if (latestVerdict === 'HUMAN_REVIEW') {
+        healthStatus = 'human_review'
+      } else if (consecutiveReworks >= 2) {
+        healthStatus = 'stalled'
+      } else if (consecutiveReworks === 1) {
+        healthStatus = 'iterating'
+      }
+
+      return {
+        implementationId: impl.id,
+        userId: impl.userId,
+        displayName,
+        courseId: course.id,
+        courseTitle: course.title,
+        completedMissionIds: impl.completedMissionIds ?? [],
+        completedCount,
+        totalMissions,
+        progressPercentage,
+        activeMissionId: impl.activeMissionId,
+        activeMissionTitle: activeMission?.title,
+        healthStatus,
+        consecutiveReworks,
+        lastActivityAt: impl.updatedAt || impl.createdAt || new Date().toISOString(),
+        preferredRouteId: impl.learnerSetup?.preferredRouteId,
+        helpPreference: impl.learnerSetup?.helpPreference,
+      }
+    })
+
+    const totalLearners = cohort.length
+    const stalledLearners = cohort.filter((l) => l.healthStatus === 'stalled').length
+    const pendingHumanReviews = cohort.filter((l) => l.healthStatus === 'human_review').length
+    const totalCompleted = cohort.reduce((sum, l) => sum + l.completedCount, 0)
+    const averageCompleted = totalLearners > 0 ? Number((totalCompleted / totalLearners).toFixed(1)) : 0
+    const globalPassRate = totalLearners > 0 ? Math.round(cohort.reduce((sum, l) => sum + l.progressPercentage, 0) / totalLearners) : 0
+
+    return {
+      cohort,
+      metrics: {
+        totalLearners,
+        stalledLearners,
+        pendingHumanReviews,
+        averageCompleted,
+        globalPassRate,
+      },
+    }
+  }
+
+  /**
+   * Retrieves full evidence history, evaluation provenance, and artifacts for a learner.
+   */
+  async getLearnerEvidenceHistory(implementationId: string): Promise<{
+    implementation: ImplementationState
+    provenance: EvaluationProvenanceRecord[]
+    artifacts: Record<string, ImplementationArtifact>
+  }> {
+    const implementation = await this.repository.getById(implementationId)
+    if (!implementation) {
+      throw new Error(`Implementation '${implementationId}' not found`)
+    }
+    return {
+      implementation,
+      provenance: implementation.evaluationProvenance ?? [],
+      artifacts: implementation.artifacts ?? {},
+    }
   }
 }

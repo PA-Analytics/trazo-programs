@@ -15,6 +15,9 @@ export interface QuestEdgeData extends Record<string, unknown> {
   leadsToMilestone: boolean
   isCorridor?: boolean
   isDimmed?: boolean
+  entryRoute?: boolean
+  entryRevealed?: boolean
+  entryCurrent?: boolean
   via?: MapPosition
 }
 
@@ -70,6 +73,7 @@ export const QuestEdge = memo(function QuestEdge({
   return (
     <BaseEdge
       path={edgePath}
+      pathLength={1}
       className="quest-edge-path"
       data-progress={data?.progressState ?? 'locked'}
       data-route={data?.routeTier ?? 'future'}
@@ -78,6 +82,9 @@ export const QuestEdge = memo(function QuestEdge({
       data-destination={data?.leadsToMilestone ?? false}
       data-corridor={data?.isCorridor ?? false}
       data-dimmed={data?.isDimmed ?? false}
+      data-entry-route={data?.entryRoute ?? false}
+      data-entry-revealed={data?.entryRevealed ?? false}
+      data-entry-current={data?.entryCurrent ?? false}
     />
   )
 })

@@ -53,11 +53,12 @@ export class MethodologyGraphRuntime {
   }
 
   getNodes(): MethodologyNode[] {
-    return this.graph.nodes
+    return this.graph.nodes.map((n) => ({ ...n }))
   }
 
   getNode(nodeId: string): MethodologyNode | undefined {
-    return this.nodeMap.get(nodeId)
+    const node = this.nodeMap.get(nodeId)
+    return node ? { ...node } : undefined
   }
 
   getEntryNodes(): MethodologyNode[] {
