@@ -105,8 +105,8 @@ flowchart TD
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/your-org/trazo-agentic.git
-cd trazo-agentic
+git clone https://github.com/PA-Analytics/trazo-programs.git
+cd trazo-programs
 npm install
 ```
 
@@ -138,18 +138,37 @@ Navigate to `http://localhost:5173`.
 
 ---
 
-## 6. Running Automated Verification Suites
+## 6. Reproducible Testing Instructions (Automated & Live)
+
+### A. Automated Test Suite (222 Tests Passing)
+Run the full test suite locally without external dependencies:
 
 ```bash
-# Static type verification (Zero TypeScript errors)
+# 1. Static typecheck verification
 npm run typecheck
 
-# Full Unit & Domain Contract Test Suite (222+ passing tests)
+# 2. Domain contracts, evaluation policy, and anti-sycophancy test suite
 npm test
 
-# Full End-to-End Playwright Browser Automation Suite
+# 3. End-to-End browser automation tests
 npx playwright test
 ```
+
+### B. Live Interactive Walkthrough (Local or Cloud Run)
+To reproduce and verify the autonomous agentic loop in under 2 minutes (on `http://localhost:5173` or `https://trazo-759796956692.us-central1.run.app`):
+
+1. **Quick Onboarding:** Select your format preference, feedback style, and session pacing to generate the dynamic Quest Map.
+2. **Mission 1 (`N01` - PASS & DAG Mutation):**
+   * Open Node `N01` (*"Premisa del Sistema"*).
+   * Submit: `"Ayudo a dueños de tiendas de e-commerce a automatizar su atención al cliente con agentes de IA para duplicar conversiones."`
+   * **Observed Result:** Gemini evaluates against the canonical rubric in ~2s, returns `PASS`, persists a canonical deliverable artifact, and dynamically unlocks two branching corridors on the map (`N02` Direct and `N03` Narrative).
+3. **Mission 2 (`N02` - Non-Sycophantic REWORK):**
+   * Open Node `N02` (*"Estructura Base"*).
+   * Submit a contradictory outline: `"Apertura: Llamar a agentes de bienes raíces locales. Desarrollo: Mostrarles propiedades de lujo en venta. Cierre: Cobrar comisión del 5%."`
+   * **Observed Result:** Gemini detects semantic divergence from the `N01` premise artifact, rejects progression, and issues a strict amber `REWORK` card with detailed criterion breakdown.
+4. **Mission 2 (`N02` - Autonomous Proactive Friction Rescue):**
+   * Submit a second flawed attempt: `"Apertura: Enviar correos a doctores y clínicas dentales. Desarrollo: Ofrecer software de citas médicas. Cierre: Agendar demo de 15 minutos."`
+   * **Observed Result:** TRAZO's background autonomy engine detects consecutive friction and dynamically injects the **"Consejo de Trazz — Sugerencia para avanzar"** rescue card directly into the panel without waiting for user prompts.
 
 ---
 
