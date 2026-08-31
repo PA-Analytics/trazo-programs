@@ -92,7 +92,7 @@ flowchart TD
 * **Cloud Infrastructure:** Google Cloud Run (Fully Managed Serverless Container), Cloud Build, Google Cloud Firestore.
 * **Backend:** Node.js 22 (Native TypeScript Strip-Types), Atomic Firestore Transactions.
 * **Frontend:** React 19, TypeScript, CSS Variables Design System (APCA-validated color contrast, 60-30-10 palette).
-* **Testing & Quality Assurance:** Playwright E2E Browser Testing, Vitest/Node Test Runner (220+ automated unit & integration tests).
+* **Testing & Quality Assurance:** Playwright E2E Browser Testing, Vitest/Node Test Runner (222 automated unit & domain contract tests).
 
 ---
 
